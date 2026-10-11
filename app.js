@@ -85,7 +85,12 @@ a.btn.link{color:var(--sel)}
 #cappop{left:50%;transform:translateX(-50%);bottom:calc(70px + env(safe-area-inset-bottom,0px));width:min(460px,calc(100vw - 24px));max-height:45vh;overflow:auto;padding:14px 16px}
 #cappop .au{font:500 12px var(--mono);color:var(--sel);margin-bottom:6px}
 #cappop .tx{white-space:pre-wrap;line-height:1.6;word-break:keep-all;overflow-wrap:anywhere}
-.grp .im.psel{outline:calc(3px / var(--s,1)) solid #fff;outline-offset:calc(-3px / var(--s,1));z-index:3}
+#cappop .ko{margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}
+#cappop .ko b{display:block;font-size:11px;letter-spacing:.06em;color:var(--sel);margin-bottom:6px}
+#cappop .ko div{white-space:pre-wrap;line-height:1.65;word-break:keep-all;overflow-wrap:anywhere}
+.grp.inside{box-shadow:0 0 0 calc(2px / var(--s,1)) var(--sel), 0 0 0 calc(5px / var(--s,1)) rgba(91,156,245,.25)}
+.grp.inside .im{opacity:.55;transition:opacity .12s}
+.grp.inside .im.psel{opacity:1;outline:calc(3px / var(--s,1)) solid #fff;outline-offset:calc(-3px / var(--s,1));z-index:3}
 #selbar .count{font:500 12px var(--mono);color:var(--mute);padding:0 8px}
 #linkpop{left:50%;transform:translateX(-50%);bottom:calc(70px + env(safe-area-inset-bottom,0px));width:min(420px,calc(100vw - 24px))}
 #tokpop{left:calc(12px + env(safe-area-inset-left,0px));bottom:calc(62px + env(safe-area-inset-bottom,0px));width:min(340px,calc(100vw - 24px));padding:14px}
@@ -134,7 +139,8 @@ const HTML = `
   <div class="sep"></div>
   <button class="btn" id="addBtn" type="button" title="이미지 추가">${ICON.plus}<span class="tx">이미지</span></button>
   <button class="btn" id="arrangeBtn" type="button" title="정렬 (A)">${ICON.grid}<span class="tx">정렬</span></button>
-  <button class="btn" id="alignBtn" type="button" title="가로 맞춤 정렬 (G): 폭을 같게 맞추고 왼쪽·위쪽 선을 맞춰요">${ICON.cols}<span class="tx">맞춤 정렬</span></button>
+  <button class="btn" id="widthBtn" type="button" title="가로 길이 맞춤 (⌘⌥←)">${ICON.cols}<span class="tx">폭 맞춤</span></button>
+  <button class="btn" id="alignBtn" type="button" title="왼쪽·위쪽 선 맞춤 정렬 (⌘⌥↑)">${ICON.grid}<span class="tx">줄 맞춤</span></button>
   <button class="btn" id="fitBtn" type="button" title="모두 보기 (F)">${ICON.fit}<span class="tx">모두 보기</span></button>
   <div class="sep"></div>
   <button class="btn" id="helpBtn" type="button" title="조작법" aria-label="조작법">${ICON.help}</button>
@@ -161,7 +167,7 @@ const HTML = `
   <div class="sep"></div>
   <button class="btn danger" id="delBtn" type="button" title="보드에서 빼기 (Delete)">${ICON.del}<span class="hide-sm">빼기</span></button>
 </div>
-<div class="pop" id="cappop" hidden><div class="au"></div><div class="tx"></div></div>
+<div class="pop" id="cappop" hidden><div class="au"></div><div class="tx"></div><div class="ko" hidden><b>한글 번역</b><div></div></div></div>
 <form class="pop row" id="linkpop" hidden><input class="field" id="linkInput" type="url" placeholder="인스타 게시글 링크" autocomplete="off"><button class="btn primary" type="submit">저장</button></form>
 <div class="pop" id="boards" hidden>
   <div class="lbl">컬렉션 보드</div><div id="blist"></div>
@@ -181,11 +187,13 @@ const HTML = `
     <dt>빈 곳 드래그</dt><dd>여러 게시글 선택</dd>
     <dt>Shift + 클릭</dt><dd>선택 추가/해제</dd>
     <dt>모서리 점</dt><dd>크기 조절</dd>
-    <dt>더블클릭</dt><dd>게시글 안의 사진 한 장 선택 (← → 로 이동, Esc로 해제) · 빈 곳은 모두 보기</dd>
+    <dt>더블클릭</dt><dd>게시글 안으로 들어가 사진 선택 (클릭으로 바꾸기, Shift+클릭 여러 장, ← → 이동, Esc로 나오기) · 빈 곳은 모두 보기</dd>
     <dt>Ctrl + Z</dt><dd>뒤로가기</dd>
     <dt>Ctrl + Shift + Z</dt><dd>되돌리기</dd>
     <dt>Ctrl + V</dt><dd>이미지 붙여넣기 · 게시글 선택 후 링크를 붙이면 원본 링크로 연결</dd>
-    <dt>F / A / G</dt><dd>모두 보기 / 자동 정렬 / 가로 맞춤 정렬</dd>
+    <dt>F / A</dt><dd>모두 보기 / 자동 정렬</dd>
+    <dt>⌘ ⌥ ←</dt><dd>가로 길이 맞춤</dd>
+    <dt>⌘ ⌥ ↑</dt><dd>왼쪽·위쪽 선 맞춤 정렬</dd>
     <dt>L</dt><dd>작성자 이름 항상 보이기 켜기/끄기</dd>
     <dt>[ / ]</dt><dd>이전 / 다음 보드</dd>
     <dt>Delete</dt><dd>선택한 게시글을 이 보드에서 빼기</dd>
@@ -399,24 +407,39 @@ function renderPl(id){
   const hdEl = el.querySelector(".hd"); if (hdEl) hdEl.style.top = (g.TB || 0) + "px";
   const mo = el.querySelector(".more"); if (mo && g.more) Object.assign(mo.style, { left: g.more.x + "px", top: g.more.y + "px", width: g.more.w + "px", height: g.more.h + "px", fontSize: g.H * 0.16 + "px" });
   el.classList.toggle("sel", sel.has(id));
-  if (photoSel && photoSel.id === id){ const m = el.querySelector(`.im[data-i="${photoSel.i}"]`); if (m) m.classList.add("psel"); }
+  if (photoSel && photoSel.id === id){ el.classList.add("inside"); for (const i of photoSel.set){ const m = el.querySelector(`.im[data-i="${i}"]`); if (m) m.classList.add("psel"); } }
 }
 function renderAll(){
   for (const [id, el] of els){ const p = data.placements[id]; if (!p || p.board !== boardId){ el.remove(); els.delete(id); sel.delete(id); } }
   for (const [id, p] of Object.entries(data.placements)) if (p.board === boardId) renderPl(id);
   renderChrome(); updateResolution();
 }
-let photoSel = null;   // { id, i } — 더블클릭으로 고른 게시글 안의 사진
-function selectPhoto(id, i){ photoSel = id == null ? null : { id, i }; renderSel(); }
+/* 그룹 안 사진 선택 (PureRef처럼): 게시글을 더블클릭하면 그 틀 '안으로 들어가고',
+   그때부터 클릭하는 사진 한 장(Shift+클릭으로 여러 장)이 선택돼요. 틀 밖을 누르거나 Esc를 누르면 나와요. */
+let photoSel = null;   // { id, i, set:Set } — 들어가 있는 게시글과 선택된 사진들
+function selectPhoto(id, i, add){
+  if (id == null){ photoSel = null; renderSel(); return; }
+  if (photoSel && photoSel.id === id && add){
+    if (photoSel.set.has(i) && photoSel.set.size > 1) photoSel.set.delete(i); else photoSel.set.add(i);
+    photoSel.i = i;
+  } else photoSel = { id, i, set: new Set([i]) };
+  sel.clear(); sel.add(id); renderSel();
+}
+function partAt(id, cx, cy){
+  const p = data.placements[id]; if (!p) return null; const w = toWorld(cx, cy);
+  return geom(p).parts.find(pt => w.x >= p.x + pt.x && w.x <= p.x + pt.x + pt.w && w.y >= p.y + pt.y && w.y <= p.y + pt.y + pt.h) || null;
+}
 function paintPhotoSel(){
   for (const m of world.querySelectorAll(".im.psel")) m.classList.remove("psel");
+  for (const g2 of world.querySelectorAll(".grp.inside")) g2.classList.remove("inside");
   if (!photoSel) return;
   const el = els.get(photoSel.id); if (!el){ photoSel = null; return; }
-  const m = el.querySelector(`.im[data-i="${photoSel.i}"]`); if (m) m.classList.add("psel");
+  el.classList.add("inside");
+  for (const i of photoSel.set){ const m = el.querySelector(`.im[data-i="${i}"]`); if (m) m.classList.add("psel"); }
 }
 function stepPhoto(d){
   if (!photoSel) return; const pl = data.placements[photoSel.id]; const n = (data.posts[pl.post]?.images || []).length;
-  photoSel.i = (photoSel.i + d + n) % n; renderSel();
+  photoSel.i = (photoSel.i + d + n) % n; photoSel.set = new Set([photoSel.i]); renderSel();
 }
 function renderSel(){
   if (photoSel && !(sel.size === 1 && sel.has(photoSel.id))) photoSel = null;
@@ -441,7 +464,7 @@ function renderChrome(){
     $("#capBtn").hidden = !(post && post.caption);
     const ph = photoSel && one ? (post.images || [])[photoSel.i] : null;
     for (const id of ["photoCount", "photoPrev", "photoNext", "photoOpen"]) $("#" + id).hidden = !ph;
-    if (ph){ $("#photoCount").textContent = `사진 ${photoSel.i + 1}/${post.images.length}`; $("#photoOpen").href = ph.v ? vidURL(ph.v) : imgURL(ph.f, 2); }
+    if (ph){ $("#photoCount").textContent = photoSel.set.size > 1 ? `사진 ${photoSel.set.size}장 선택` : `사진 ${photoSel.i + 1}/${post.images.length}`; $("#photoOpen").href = ph.v ? vidURL(ph.v) : imgURL(ph.f, 2); }
     const og = one ? geom(one) : null;
     $("#foldBtn").hidden = !(og && og.total > FOLD);
     if (og) $("#foldBtn span").textContent = one.open ? "접기" : "펼치기";
@@ -626,28 +649,33 @@ function hForWidth(pl, W){   // 게시글 틀의 폭이 W가 되는 크기(h)를
   const w1 = geom({ ...pl, h: 100 }).w, w2 = geom({ ...pl, h: 200 }).w;
   return Math.max(30, 100 + (W - w1) * 100 / (w2 - w1));
 }
-function alignGrid(){   // 가로 맞춤 정렬: 모든 틀의 폭을 같게 맞추고, 열(왼쪽 선)과 줄(위쪽 선)을 맞춰 배치
-  const ids = sel.size > 1 ? [...sel] : boardPls().map(p => p.id);
-  if (ids.length < 2) return;
+function targets(){ return sel.size > 1 ? [...sel] : boardPls().map(p => p.id); }
+function equalWidth(){   // 가로 길이 맞춤: 모든 틀의 폭을 같게 (위치는 왼쪽 위 기준으로 유지)
+  const ids = targets(); if (ids.length < 2) return;
   const before = snap(ids);
-  const arr = ids.map(id => ({ id, p: data.placements[id] }));
-  arr.sort((a, b) => (data.posts[b.p.post]?.created || 0) - (data.posts[a.p.post]?.created || 0));
-  const widths = arr.map(a => geom(a.p).w).sort((a, b) => a - b);
-  const W = widths[Math.floor(widths.length / 2)];   // 지금 폭들의 중간값으로 통일
+  const widths = ids.map(id => geom(data.placements[id]).w).sort((a, b) => a - b);
+  const W = widths[Math.floor(widths.length / 2)];
+  for (const id of ids){ const p = data.placements[id]; edit("placements", id, { ...p, h: Math.round(hForWidth(p, W) * 10) / 10 }); }
+  renderAll(); record(before); updateResolution();
+  toast("폭을 같게 맞췄어요 · 겹치면 ⌘⌥↑로 줄을 맞춰 보세요");
+}
+function alignTopLeft(){   // 왼쪽·위쪽 선 맞춤 정렬: 열마다 왼쪽 선, 줄마다 위쪽 선이 맞게 격자로 배치
+  const ids = targets(); if (ids.length < 2) return;
+  const before = snap(ids);
+  const arr = ids.map(id => ({ id, p: data.placements[id], g: geom(data.placements[id]) }));
+  arr.sort((a, b) => (Math.round(a.p.y / 200) - Math.round(b.p.y / 200)) || (a.p.x - b.p.x));   // 지금 놓인 순서(위→아래, 왼쪽→오른쪽)를 유지
   const x0 = Math.min(...arr.map(a => a.p.x)), y0 = Math.min(...arr.map(a => a.p.y));
-  const sized = arr.map(a => { const h = hForWidth(a.p, W); return { ...a, h, g: geom({ ...a.p, h }) }; });
-  const area = sized.reduce((s, a) => s + W * a.g.h, 0);
-  let cols = Math.max(1, Math.round(Math.sqrt(area * 1.6) / (W + GAP_POST)));
-  cols = Math.min(cols, sized.length);
+  const colW = Math.max(...arr.map(a => a.g.w));
+  const area = arr.reduce((s, a) => s + colW * a.g.h, 0);
+  const cols = Math.min(arr.length, Math.max(1, Math.round(Math.sqrt(area * 1.6) / (colW + GAP_POST))));
   let y = 0;
-  for (let r = 0; r < sized.length; r += cols){
-    const row = sized.slice(r, r + cols); let rowH = 0;
-    row.forEach((a, c) => { edit("placements", a.id, { ...a.p, h: Math.round(a.h * 10) / 10, x: Math.round(x0 + c * (W + GAP_POST)), y: Math.round(y0 + y) }); rowH = Math.max(rowH, a.g.h); });
+  for (let r = 0; r < arr.length; r += cols){
+    const row = arr.slice(r, r + cols); let rowH = 0;
+    row.forEach((a, c) => { edit("placements", a.id, { ...a.p, x: Math.round(x0 + c * (colW + GAP_POST)), y: Math.round(y0 + y) }); rowH = Math.max(rowH, a.g.h); });
     y += rowH + GAP_POST;
   }
-  renderAll(); record(before); updateResolution();
-  fitRects(ids.map(plRect));
-  toast("폭을 맞추고 왼쪽·위쪽 선에 맞춰 정렬했어요 · Ctrl+Z로 되돌릴 수 있어요");
+  renderAll(); record(before); fitRects(ids.map(plRect));
+  toast("왼쪽·위쪽 선에 맞춰 정렬했어요 · ⌘Z로 되돌릴 수 있어요");
 }
 function arrange(){
   const ids = sel.size > 1 ? [...sel] : boardPls().map(p => p.id);
@@ -680,6 +708,7 @@ function showCaption(){
   const pl = data.placements[[...sel][0]]; const post = pl && data.posts[pl.post]; if (!post) return;
   cp.querySelector(".au").textContent = post.author ? "@" + post.author : "";
   cp.querySelector(".tx").textContent = post.caption || "";
+  const ko = cp.querySelector(".ko"); ko.hidden = !post.caption_ko; ko.querySelector("div").textContent = post.caption_ko || "";
   $("#linkpop").hidden = true; cp.hidden = false;
 }
 function stepBoard(d){
@@ -755,9 +784,18 @@ stage.addEventListener("pointerdown", e => {
   if (grp && e.target.classList.contains("h")){
     const id = grp.dataset.id; g = { type: "resize", ...base, id, before: snap([id]), h0: data.placements[id].h || 300, w0: geom(data.placements[id]).w }; gesturing = true; return;
   }
+  if (grp && e.pointerType === "touch" && photoSel && grp.dataset.id === photoSel.id){
+    g = { type: "pan", ...base, vx: view.x, vy: view.y, tapPhoto: true }; gesturing = true; return;
+  }
   if (grp && e.pointerType === "touch"){   // 휴대폰: 한 손가락으로 쓸면 화면 이동, 톡 누르면 그 게시글 선택
     g = { type: "pan", ...base, vx: view.x, vy: view.y, tapSelect: grp.dataset.id }; gesturing = true; return;
   }
+  if (grp && photoSel && grp.dataset.id === photoSel.id){
+    const pt = partAt(photoSel.id, e.clientX, e.clientY);
+    if (pt) selectPhoto(photoSel.id, pt.i, e.shiftKey || e.metaKey || e.ctrlKey);
+    g = { type: "none" }; return;
+  }
+  if (photoSel){ photoSel = null; paintPhotoSel(); }   // 다른 곳을 누르면 그룹에서 나와요
   if (grp){
     const id = grp.dataset.id, add = e.shiftKey || e.ctrlKey || e.metaKey;
     if (add){ if (sel.has(id)){ sel.delete(id); renderSel(); g = { type: "none" }; return; } sel.add(id); }
@@ -818,6 +856,7 @@ function endGesture(cancelled){
     if (t.moved && p){ edit("placements", t.id, { ...p, h: Math.round(p.h) }); record(t.before); updateResolution(); }
   } else if (t.type === "pan" && !t.moved && !cancelled){
     if (t.tapClear && sel.size){ sel.clear(); renderSel(); }
+    if (t.tapPhoto && photoSel){ const pt = partAt(photoSel.id, t.sx, t.sy); if (pt) selectPhoto(photoSel.id, pt.i); }
     if (t.tapSelect){ const was = sel.size === 1 && sel.has(t.tapSelect); sel.clear(); if (!was) sel.add(t.tapSelect); renderSel(); }
     if (t.button === 2 && t.id && !sel.has(t.id)){ sel.clear(); sel.add(t.id); renderSel(); }
   }
@@ -852,7 +891,7 @@ stage.addEventListener("pointerup", e => {
   const now = performance.now();
   if (now - lastTap.t < 320 && lastTap.key === key && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 20){
     lastTap.t = 0;
-    if (rect){ sel.clear(); sel.add(rect.id); selectPhoto(rect.id, rect.i); }   // 게시글 안 사진 한 장 선택
+    if (rect){ selectPhoto(rect.id, rect.i); }   // 게시글 '안으로 들어가서' 그 사진 선택
     else if (!grp) fitAll();
     return;
   }
@@ -874,6 +913,8 @@ const typing = e => { const t = e.target; return t && (t.tagName === "INPUT" || 
 addEventListener("keydown", e => {
   if (typing(e)){ if (e.key === "Escape") closePops(); return; }
   const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+  if (mod && e.altKey && e.key === "ArrowLeft"){ e.preventDefault(); equalWidth(); return; }
+  if (mod && e.altKey && e.key === "ArrowUp"){ e.preventDefault(); alignTopLeft(); return; }
   if (mod && k === "z"){ e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
   if (mod && k === "y"){ e.preventDefault(); redo(); return; }
   if (mod && k === "a"){ e.preventDefault(); boardPls().forEach(p => sel.add(p.id)); renderSel(); return; }
@@ -884,7 +925,6 @@ addEventListener("keydown", e => {
     case "Escape": closePops(); if (photoSel){ selectPhoto(null); break; } if (sel.size){ sel.clear(); renderSel(); } break;
     case "ArrowLeft": if (photoSel){ e.preventDefault(); stepPhoto(-1); } break;
     case "ArrowRight": if (photoSel){ e.preventDefault(); stepPhoto(1); } break;
-    case "g": case "G": alignGrid(); break;
     case "f": case "F": sel.size ? fitSel() : fitAll(); break;
     case "a": case "A": arrange(); break;
     case "l": case "L": document.body.classList.toggle("labels"); LS.set("rb.labels", document.body.classList.contains("labels")); break;
@@ -948,7 +988,8 @@ $("#newBoard").onsubmit = e => { e.preventDefault(); const v = $("#newBoardName"
 $("#addBtn").onclick = () => $("#fileIn").click();
 $("#fitBtn").onclick = fitAll;
 $("#arrangeBtn").onclick = arrange;
-$("#alignBtn").onclick = alignGrid;
+$("#alignBtn").onclick = alignTopLeft;
+$("#widthBtn").onclick = equalWidth;
 $("#undoBtn").onclick = undo;
 $("#redoBtn").onclick = redo;
 $("#zoomIn").onclick = () => zoomAt(innerWidth / 2, innerHeight / 2, 1.25);
