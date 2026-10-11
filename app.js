@@ -23,11 +23,12 @@ button{cursor:pointer}
 #world{position:absolute;left:0;top:0;transform-origin:0 0}
 .grp{position:absolute;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;background:var(--panel);border-radius:5px;box-shadow:0 0 0 1px var(--line)}
 .grp .hd{position:absolute;left:0;right:0;top:0;display:flex;align-items:center;gap:.6em;padding:.45em .7em;font:500 min(calc(12px / var(--s,1)), var(--fh,12px))/1.2 var(--mono);color:#fff;white-space:nowrap;overflow:hidden;
-  background:linear-gradient(rgba(10,10,12,.78),rgba(10,10,12,0));border-radius:5px 5px 0 0;opacity:0;transition:opacity .15s;pointer-events:none;z-index:2}
+  background:linear-gradient(rgba(10,10,12,.78),rgba(10,10,12,0));opacity:0;transition:opacity .15s;pointer-events:none;z-index:2}
 .grp:hover .hd,.grp.sel .hd,body.labels .grp .hd,.grp.card .hd{opacity:1}
 .grp .hd .au{overflow:hidden;text-overflow:ellipsis}
 .grp .hd .n{margin-left:auto;flex:none;opacity:.75}
 .grp .hd .lk{width:.55em;height:.55em;border-radius:50%;background:var(--sel);flex:none}
+.grp .ttl{position:absolute;top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--fg);font-weight:600;letter-spacing:-.01em;pointer-events:none}
 .grp .more{position:absolute;display:grid;place-items:center;background:var(--panel-2);color:var(--fg);font-family:var(--mono);border-radius:2px;cursor:pointer}
 .grp .more:hover{background:var(--line)}
 .grp .vb{position:absolute;width:0;height:0;border-left:calc(9px / var(--s,1)) solid rgba(255,255,255,.85);border-top:calc(6px / var(--s,1)) solid transparent;border-bottom:calc(6px / var(--s,1)) solid transparent;transform:translateY(-100%);pointer-events:none;z-index:1;filter:drop-shadow(0 0 2px rgba(0,0,0,.6))}
@@ -165,7 +166,8 @@ const HTML = `
 <div class="pop" id="help" hidden>
   <h2>조작법</h2>
   <dl>
-    <dt>휠</dt><dd>커서 위치로 확대/축소 (트랙패드 두 손가락은 이동)</dd>
+    <dt>휠 · 핀치</dt><dd>커서 위치로 확대/축소</dd>
+    <dt>Option + 두 손가락 위아래</dt><dd>확대/축소 (그냥 두 손가락은 이동)</dd>
     <dt>우클릭·휠클릭 드래그</dt><dd>화면 이동</dd>
     <dt>Space + 드래그</dt><dd>화면 이동</dd>
     <dt>빈 곳 드래그</dt><dd>여러 게시글 선택</dd>
@@ -180,7 +182,7 @@ const HTML = `
     <dt>[ / ]</dt><dd>이전 / 다음 보드</dd>
     <dt>Delete</dt><dd>선택한 게시글을 이 보드에서 빼기</dd>
   </dl>
-  <p>한 게시글의 이미지와 영상은 하나의 틀 안에 나란히 붙어 있어요. 마우스를 올리면 작성자 계정이 보이고, 여러 장인 게시글은 6장씩 줄을 바꿔 모든 이미지가 한눈에 보여요. 휴대폰에서는 두 손가락으로 확대하고 한 손가락으로 빈 곳을 끌어 이동해요.</p>
+  <p>휴대폰에서는 한 손가락으로 쓸면 화면이 움직이고, 게시글을 톡 누르면 선택돼요(다시 누르면 해제). 한 게시글의 이미지와 영상은 하나의 틀 안에 나란히 붙어 있어요. 마우스를 올리면 작성자 계정이 보이고, 여러 장인 게시글은 6장씩 줄을 바꿔 모든 이미지가 한눈에 보여요. 휴대폰에서는 두 손가락으로 확대하고 한 손가락으로 빈 곳을 끌어 이동해요.</p>
 </div>
 <div id="drop"><span>여기에 놓으면 보드에 추가돼요</span></div>
 <div class="ui" id="toast" aria-live="polite"></div>
@@ -243,18 +245,18 @@ function geom(pl){
   const p = data.posts[pl.post] || {};
   const H = pl.h || 300;
   const imgs = p.images || [];
-  if (!imgs.length) return { w: Math.round(H * 0.8), h: H, card: true, parts: [], H };
+  if (!imgs.length) return { w: Math.round(H * 0.8), h: H, card: true, parts: [], H, TB: 0 };
   // 같은 게시글 안의 사진은 가로 길이를 모두 같게 해요. 열 수 = 한 줄 장수(최대 6), 순서대로 가장 짧은 열에 쌓아요.
   const cols = Math.ceil(imgs.length / Math.ceil(imgs.length / ROW));
-  const cw = H * 0.75;
-  const colH = new Array(cols).fill(PAD), parts = [];
+  const cw = H * 0.75, TB = H * 0.13;   // TB: 맨 위 제목 줄 높이
+  const colH = new Array(cols).fill(PAD + TB), parts = [];
   imgs.forEach((im, i) => {
     let c = 0; for (let k = 1; k < cols; k++) if (colH[k] < colH[c] - 0.5) c = k;
     const h = cw * im.h / im.w;
     parts.push({ x: PAD + c * (cw + GAP), y: colH[c], w: cw, h, im, i });
     colH[c] += h + GAP;
   });
-  return { w: PAD * 2 + cols * cw + (cols - 1) * GAP, h: Math.max(...colH) - GAP + PAD, parts, more: null, H, total: imgs.length, folded: false };
+  return { w: PAD * 2 + cols * cw + (cols - 1) * GAP, h: Math.max(...colH) - GAP + PAD, parts, more: null, H, TB, total: imgs.length, folded: false };
 }
 const boardPls = () => Object.entries(data.placements).filter(([, p]) => p.board === boardId).map(([id, p]) => ({ id, ...p, g: geom(p) }));
 const plRect = id => { const p = data.placements[id]; if (!p) return null; const g = geom(p); return { x: p.x, y: p.y, w: g.w, h: g.h }; };
@@ -332,7 +334,7 @@ function renderPl(id){
   const p = data.placements[id]; if (!p) return;
   const post = data.posts[p.post] || {};
   const g = geom(p);
-  const sig = JSON.stringify([post.images, post.author, post.caption, post.link, g.card, g.folded]);
+  const sig = JSON.stringify([post.images, post.author, post.caption, post.link, post.title, g.card, g.folded]);
   let el = els.get(id);
   if (el && el.dataset.sig !== sig){ el.remove(); els.delete(id); el = null; }
   if (!el){
@@ -355,6 +357,7 @@ function renderPl(id){
       }
       m.dataset.i = pt.i; el.append(m);
     });
+    if (!g.card){ const tt = document.createElement("div"); tt.className = "ttl"; tt.textContent = post.title || (post.caption || "").split(/\n/)[0] || (post.author ? "@" + post.author : ""); el.append(tt); }
     if (g.more){ const mo = document.createElement("div"); mo.className = "more"; mo.textContent = "+" + g.more.n; el.append(mo); }
     const hd = document.createElement("div"); hd.className = "hd";
     if (post.link){ const lk = document.createElement("i"); lk.className = "lk"; hd.append(lk); }
@@ -370,6 +373,8 @@ function renderPl(id){
   const media = el.querySelectorAll(".im");
   g.parts.forEach((pt, i) => { const m = media[i]; if (!m) return; Object.assign(m.style, { left: pt.x + "px", top: pt.y + "px", width: pt.w + "px", height: pt.h + "px" }); });
   for (const b of el.querySelectorAll(".vb")){ const pt = g.parts[+b.dataset.i]; if (pt) Object.assign(b.style, { left: (pt.x + 6) + "px", top: (pt.y + pt.h - 6) + "px" }); }
+  const tt = el.querySelector(".ttl"); if (tt) Object.assign(tt.style, { height: g.TB + "px", lineHeight: g.TB + "px", fontSize: g.TB * 0.5 + "px", left: PAD + "px", right: PAD + "px" });
+  const hdEl = el.querySelector(".hd"); if (hdEl) hdEl.style.top = (g.TB || 0) + "px";
   const mo = el.querySelector(".more"); if (mo && g.more) Object.assign(mo.style, { left: g.more.x + "px", top: g.more.y + "px", width: g.more.w + "px", height: g.more.h + "px", fontSize: g.H * 0.16 + "px" });
   el.classList.toggle("sel", sel.has(id));
 }
@@ -673,6 +678,9 @@ stage.addEventListener("pointerdown", e => {
   if (grp && e.target.classList.contains("h")){
     const id = grp.dataset.id; g = { type: "resize", ...base, id, before: snap([id]), h0: data.placements[id].h || 300, w0: geom(data.placements[id]).w }; gesturing = true; return;
   }
+  if (grp && e.pointerType === "touch"){   // 휴대폰: 한 손가락으로 쓸면 화면 이동, 톡 누르면 그 게시글 선택
+    g = { type: "pan", ...base, vx: view.x, vy: view.y, tapSelect: grp.dataset.id }; return;
+  }
   if (grp){
     const id = grp.dataset.id, add = e.shiftKey || e.ctrlKey || e.metaKey;
     if (add){ if (sel.has(id)){ sel.delete(id); renderSel(); g = { type: "none" }; return; } sel.add(id); }
@@ -733,6 +741,7 @@ function endGesture(cancelled){
     if (t.moved && p){ edit("placements", t.id, { ...p, h: Math.round(p.h) }); record(t.before); updateResolution(); }
   } else if (t.type === "pan" && !t.moved && !cancelled){
     if (t.tapClear && sel.size){ sel.clear(); renderSel(); }
+    if (t.tapSelect){ const was = sel.size === 1 && sel.has(t.tapSelect); sel.clear(); if (!was) sel.add(t.tapSelect); renderSel(); }
     if (t.button === 2 && t.id && !sel.has(t.id)){ sel.clear(); sel.add(t.id); renderSel(); }
   }
   if (queuedRemote){ const d = queuedRemote; queuedRemote = null; RB.onRemote(d); }
@@ -771,8 +780,11 @@ stage.addEventListener("wheel", e => {
   e.preventDefault();
   const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? innerHeight : 1;
   const dx = e.deltaX * unit, dy = e.deltaY * unit;
-  if (!e.ctrlKey && !e.metaKey && Math.abs(dx) > 0.5 && e.deltaMode === 0){ view.x -= dx; view.y -= dy; applyView(); return; }
-  zoomAt(e.clientX, e.clientY, Math.exp(-Math.max(-300, Math.min(300, dy)) * (e.ctrlKey ? 0.01 : 0.0018)));
+  const mouseWheel = e.deltaMode !== 0 || (dx === 0 && Math.abs(dy) >= 50 && Number.isInteger(e.deltaY));
+  if (e.ctrlKey || e.metaKey){ zoomAt(e.clientX, e.clientY, Math.exp(-Math.max(-300, Math.min(300, dy)) * 0.01)); return; }   // 핀치
+  if (e.altKey){ const d = Math.abs(dy) >= Math.abs(dx) ? dy : dx; zoomAt(e.clientX, e.clientY, Math.exp(-Math.max(-300, Math.min(300, d)) * (mouseWheel ? 0.0018 : 0.008))); return; }   // Option + 두 손가락 위아래 = 줌
+  if (mouseWheel){ zoomAt(e.clientX, e.clientY, Math.exp(-Math.max(-300, Math.min(300, dy)) * 0.0018)); return; }   // 마우스 휠 = 줌
+  view.x -= dx; view.y -= dy; applyView();   // 트랙패드 두 손가락 = 이동
 }, { passive: false });
 
 /* ================= keyboard / paste / drop ================= */
