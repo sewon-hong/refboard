@@ -124,6 +124,8 @@ const ICON = {
   front:'<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="1.5"/><path d="M4 16V5a1 1 0 0 1 1-1h11"/></svg>',
   zoom:'<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.2-4.2M11 8v6M8 11h6"/></svg>',
   del:'<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>',
+  alignL:'<svg viewBox="0 0 24 24"><path d="M4 3v18"/><rect x="7" y="5" width="12" height="5" rx="1"/><rect x="7" y="14" width="8" height="5" rx="1"/></svg>',
+  alignT:'<svg viewBox="0 0 24 24"><path d="M3 4h18"/><rect x="5" y="7" width="5" height="12" rx="1"/><rect x="14" y="7" width="5" height="8" rx="1"/></svg>',
   cols:'<svg viewBox="0 0 24 24"><rect x="3" y="3" width="5" height="11" rx="1"/><rect x="9.5" y="3" width="5" height="7" rx="1"/><rect x="16" y="3" width="5" height="14" rx="1"/><path d="M3 21h18"/></svg>',
   text:'<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>',
   edit:'<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/></svg>'
@@ -139,8 +141,9 @@ const HTML = `
   <div class="sep"></div>
   <button class="btn" id="addBtn" type="button" title="이미지 추가">${ICON.plus}<span class="tx">이미지</span></button>
   <button class="btn" id="arrangeBtn" type="button" title="정렬 (A)">${ICON.grid}<span class="tx">정렬</span></button>
-  <button class="btn" id="widthBtn" type="button" title="가로 길이 맞춤 (⌘⌥←)">${ICON.cols}<span class="tx">폭 맞춤</span></button>
-  <button class="btn" id="alignBtn" type="button" title="왼쪽·위쪽 선 맞춤 정렬 (⌘⌥↑)">${ICON.grid}<span class="tx">줄 맞춤</span></button>
+  <button class="btn" id="widthBtn" type="button" title="가로 길이 맞춤 (⌘⌥A)">${ICON.cols}<span class="tx">폭 맞춤</span></button>
+  <button class="btn" id="leftBtn" type="button" title="왼쪽 정렬 (⌘←)">${ICON.alignL}<span class="tx">왼쪽</span></button>
+  <button class="btn" id="topBtn" type="button" title="위로 정렬 (⌘↑)">${ICON.alignT}<span class="tx">위로</span></button>
   <button class="btn" id="fitBtn" type="button" title="모두 보기 (F)">${ICON.fit}<span class="tx">모두 보기</span></button>
   <div class="sep"></div>
   <button class="btn" id="helpBtn" type="button" title="조작법" aria-label="조작법">${ICON.help}</button>
@@ -192,8 +195,9 @@ const HTML = `
     <dt>Ctrl + Shift + Z</dt><dd>되돌리기</dd>
     <dt>Ctrl + V</dt><dd>이미지 붙여넣기 · 게시글 선택 후 링크를 붙이면 원본 링크로 연결</dd>
     <dt>F / A</dt><dd>모두 보기 / 자동 정렬</dd>
-    <dt>⌘ ⌥ ←</dt><dd>가로 길이 맞춤</dd>
-    <dt>⌘ ⌥ ↑</dt><dd>왼쪽·위쪽 선 맞춤 정렬</dd>
+    <dt>⌘ ⌥ A</dt><dd>가로 길이 맞춤</dd>
+    <dt>⌘ ←</dt><dd>왼쪽 정렬 (왼쪽 끝 맞추기)</dd>
+    <dt>⌘ ↑</dt><dd>위로 정렬 (위쪽 끝 맞추기)</dd>
     <dt>L</dt><dd>작성자 이름 항상 보이기 켜기/끄기</dd>
     <dt>[ / ]</dt><dd>이전 / 다음 보드</dd>
     <dt>Delete</dt><dd>선택한 게시글을 이 보드에서 빼기</dd>
@@ -657,25 +661,23 @@ function equalWidth(){   // 가로 길이 맞춤: 모든 틀의 폭을 같게 (�
   const W = widths[Math.floor(widths.length / 2)];
   for (const id of ids){ const p = data.placements[id]; edit("placements", id, { ...p, h: Math.round(hForWidth(p, W) * 10) / 10 }); }
   renderAll(); record(before); updateResolution();
-  toast("폭을 같게 맞췄어요 · 겹치면 ⌘⌥↑로 줄을 맞춰 보세요");
+  toast("폭을 같게 맞췄어요 · ⌘Z로 되돌릴 수 있어요");
 }
-function alignTopLeft(){   // 왼쪽·위쪽 선 맞춤 정렬: 열마다 왼쪽 선, 줄마다 위쪽 선이 맞게 격자로 배치
+function alignEdge(axis){   // axis "x": 왼쪽 정렬, "y": 위로 정렬 — 왼쪽(위쪽) 끝을 맞추고, 겹치면 순서대로 밀어내요
   const ids = targets(); if (ids.length < 2) return;
   const before = snap(ids);
+  const other = axis === "x" ? "y" : "x", size = axis === "x" ? "h" : "w";
   const arr = ids.map(id => ({ id, p: data.placements[id], g: geom(data.placements[id]) }));
-  arr.sort((a, b) => (Math.round(a.p.y / 200) - Math.round(b.p.y / 200)) || (a.p.x - b.p.x));   // 지금 놓인 순서(위→아래, 왼쪽→오른쪽)를 유지
-  const x0 = Math.min(...arr.map(a => a.p.x)), y0 = Math.min(...arr.map(a => a.p.y));
-  const colW = Math.max(...arr.map(a => a.g.w));
-  const area = arr.reduce((s, a) => s + colW * a.g.h, 0);
-  const cols = Math.min(arr.length, Math.max(1, Math.round(Math.sqrt(area * 1.6) / (colW + GAP_POST))));
-  let y = 0;
-  for (let r = 0; r < arr.length; r += cols){
-    const row = arr.slice(r, r + cols); let rowH = 0;
-    row.forEach((a, c) => { edit("placements", a.id, { ...a.p, x: Math.round(x0 + c * (colW + GAP_POST)), y: Math.round(y0 + y) }); rowH = Math.max(rowH, a.g.h); });
-    y += rowH + GAP_POST;
+  const edge = Math.min(...arr.map(a => a.p[axis]));
+  arr.sort((a, b) => a.p[other] - b.p[other]);
+  let next = -Infinity;
+  for (const a of arr){
+    const pos = Math.max(a.p[other], next);
+    edit("placements", a.id, { ...a.p, [axis]: Math.round(edge), [other]: Math.round(pos) });
+    next = pos + a.g[size] + GAP_POST;
   }
-  renderAll(); record(before); fitRects(ids.map(plRect));
-  toast("왼쪽·위쪽 선에 맞춰 정렬했어요 · ⌘Z로 되돌릴 수 있어요");
+  renderAll(); record(before);
+  toast((axis === "x" ? "왼쪽" : "위쪽") + " 끝을 맞췄어요 · ⌘Z로 되돌릴 수 있어요");
 }
 function arrange(){
   const ids = sel.size > 1 ? [...sel] : boardPls().map(p => p.id);
@@ -913,8 +915,9 @@ const typing = e => { const t = e.target; return t && (t.tagName === "INPUT" || 
 addEventListener("keydown", e => {
   if (typing(e)){ if (e.key === "Escape") closePops(); return; }
   const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
-  if (mod && e.altKey && e.key === "ArrowLeft"){ e.preventDefault(); equalWidth(); return; }
-  if (mod && e.altKey && e.key === "ArrowUp"){ e.preventDefault(); alignTopLeft(); return; }
+  if (mod && e.altKey && e.code === "KeyA"){ e.preventDefault(); equalWidth(); return; }   // ⌘⌥A 가로 길이 맞춤
+  if (mod && !e.altKey && e.key === "ArrowLeft"){ e.preventDefault(); alignEdge("x"); return; }   // ⌘← 왼쪽 정렬
+  if (mod && !e.altKey && e.key === "ArrowUp"){ e.preventDefault(); alignEdge("y"); return; }     // ⌘↑ 위로 정렬
   if (mod && k === "z"){ e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
   if (mod && k === "y"){ e.preventDefault(); redo(); return; }
   if (mod && k === "a"){ e.preventDefault(); boardPls().forEach(p => sel.add(p.id)); renderSel(); return; }
@@ -988,7 +991,8 @@ $("#newBoard").onsubmit = e => { e.preventDefault(); const v = $("#newBoardName"
 $("#addBtn").onclick = () => $("#fileIn").click();
 $("#fitBtn").onclick = fitAll;
 $("#arrangeBtn").onclick = arrange;
-$("#alignBtn").onclick = alignTopLeft;
+$("#leftBtn").onclick = () => alignEdge("x");
+$("#topBtn").onclick = () => alignEdge("y");
 $("#widthBtn").onclick = equalWidth;
 $("#undoBtn").onclick = undo;
 $("#redoBtn").onclick = redo;
