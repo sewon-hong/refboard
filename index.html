@@ -45,21 +45,22 @@ window.RB = { owner: "sewon-hong", repo: "refboard", branch: "main", pollMs: 150
     if (!r.ok) throw new Error(path + " " + r.status);
     return r.text();
   };
-  let etag = null, lastSha = null, apiPausedUntil = 0;
+  /* 최신 커밋 확인: 토큰이 있는 기기는 GitHub API(시간당 5000회), 없는 기기는 이 사이트의 version.json?t=… 을 봐요.
+     (로그인 없이 API를 쓰면 시간당 60회라 금방 막혀요. version.json은 올린 뒤 1분 안쪽으로 반영돼요.) */
+  let etag = null, lastSha = null;
   async function latestSha(){
     if (local) return "local";
-    if (Date.now() > apiPausedUntil){
+    const t = RB.token();
+    if (t){
       try {
-        const h = { Accept: "application/vnd.github+json" }; if (etag) h["If-None-Match"] = etag;
-        const t = RB.token(); if (t) h.Authorization = "Bearer " + t;
+        const h = { Accept: "application/vnd.github+json", Authorization: "Bearer " + t }; if (etag) h["If-None-Match"] = etag;
         const r = await fetch(RB.api(`commits/${RB.branch}`), { headers: h, cache: "no-store" });
         if (r.status === 304 && lastSha) return lastSha;
         if (r.ok){ etag = r.headers.get("ETag"); return (lastSha = (await r.json()).sha); }
-        apiPausedUntil = Date.now() + 15 * 60 * 1000;
-      } catch (e) { apiPausedUntil = Date.now() + 5 * 60 * 1000; }
+      } catch (e) {}
     }
     try {
-      const r = await fetch(`https://raw.githubusercontent.com/${RB.owner}/${RB.repo}/${RB.branch}/version.json?t=${Date.now()}`, { cache: "no-store" });
+      const r = await fetch("version.json?t=" + Date.now(), { cache: "no-store" });
       const v = await r.json(); if (v.commit) return (lastSha = v.commit);
     } catch (e) {}
     return lastSha || RB.branch;
