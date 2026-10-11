@@ -13,8 +13,8 @@
 </style>
 <script>
 /* 이 파일은 거의 바뀌지 않는 '로더'예요. 실제 화면(app.js)과 데이터(data.json)는
-   GitHub의 version.json을 10초마다 확인해 새로고침 없이 반영해요. */
-window.RB = { owner: "sewon-hong", repo: "refboard", branch: "main", pollMs: 10000 };
+   GitHub 최신 커밋을 15초마다 확인해 새로고침 없이 반영해요. */
+window.RB = { owner: "sewon-hong", repo: "refboard", branch: "main", pollMs: 15000 };
 </script>
 </head>
 <body>
@@ -33,39 +33,56 @@ window.RB = { owner: "sewon-hong", repo: "refboard", branch: "main", pollMs: 100
   RB.api = (path) => `https://api.github.com/repos/${RB.owner}/${RB.repo}/${path}`;
   RB.raw = (sha, path) => local ? path : `https://raw.githubusercontent.com/${RB.owner}/${RB.repo}/${sha}/${path}`;
 
-  /* 새 버전 확인: GitHub API(시간당 60회 제한) 대신 version.json(파일 해시)을 raw 주소로 확인해요.
-     ?t= 를 붙여 캐시를 피해요. API는 쓰지 않아서 횟수 제한에 걸리지 않아요. */
-  const rawMain = (path) => local ? path + "?t=" + Date.now()
-    : `https://raw.githubusercontent.com/${RB.owner}/${RB.repo}/${RB.branch}/${path}?t=${Date.now()}`;
-  const getText = async (path) => {
-    let r;
-    try { r = await fetch(rawMain(path), { cache: "no-store" }); } catch (e) { r = null; }
+  /* 새 버전 확인 방법
+     1) GitHub API로 최신 커밋을 확인 (ETag를 써서 바뀌지 않았으면 횟수에 안 잡혀요)
+     2) API가 막히면 version.json(최신 커밋 번호가 적힌 파일)으로 대신 확인
+     내용(app.js, data.json)은 항상 '커밋 번호가 붙은 주소'로 받아서 캐시 때문에 옛 내용이 보이지 않아요. */
+  const rawAt = (ref, path) => local ? path + "?t=" + Date.now() : `https://raw.githubusercontent.com/${RB.owner}/${RB.repo}/${ref}/${path}`;
+  const getText = async (ref, path) => {
+    let r = null;
+    try { r = await fetch(rawAt(ref, path), { cache: local ? "no-store" : "default" }); } catch (e) {}
     if (!r || !r.ok) r = await fetch(path + "?t=" + Date.now(), { cache: "no-store" });   // Pages 사본으로 대신
     if (!r.ok) throw new Error(path + " " + r.status);
     return r.text();
   };
-  const getVersion = async () => { try { return JSON.parse(await getText("version.json")); } catch { return null; } };
-  RB.latestSha = async () => null;
+  let etag = null, lastSha = null, apiPausedUntil = 0;
+  async function latestSha(){
+    if (local) return "local";
+    if (Date.now() > apiPausedUntil){
+      try {
+        const h = { Accept: "application/vnd.github+json" }; if (etag) h["If-None-Match"] = etag;
+        const t = RB.token(); if (t) h.Authorization = "Bearer " + t;
+        const r = await fetch(RB.api(`commits/${RB.branch}`), { headers: h, cache: "no-store" });
+        if (r.status === 304 && lastSha) return lastSha;
+        if (r.ok){ etag = r.headers.get("ETag"); return (lastSha = (await r.json()).sha); }
+        apiPausedUntil = Date.now() + 15 * 60 * 1000;
+      } catch (e) { apiPausedUntil = Date.now() + 5 * 60 * 1000; }
+    }
+    try {
+      const r = await fetch(`https://raw.githubusercontent.com/${RB.owner}/${RB.repo}/${RB.branch}/version.json?t=${Date.now()}`, { cache: "no-store" });
+      const v = await r.json(); if (v.commit) return (lastSha = v.commit);
+    } catch (e) {}
+    return lastSha || RB.branch;
+  }
+  RB.latestSha = latestSha;
 
-  let ver = null, appCode = null;
+  let appCode = null;
   async function boot() {
-    ver = await getVersion();
-    const [code, json] = await Promise.all([getText("app.js"), getText("data.json")]);
-    appCode = code;
-    RB.sha = ver ? ver.data : "0";
-    RB.data = JSON.parse(json);
+    const sha = await latestSha();
+    const [code, json] = await Promise.all([getText(sha, "app.js"), getText(sha, "data.json")]);
+    appCode = code; RB.sha = sha; RB.data = JSON.parse(json);
     const s = document.createElement("script");
     s.src = URL.createObjectURL(new Blob([code], { type: "text/javascript" }));
     document.body.append(s);
   }
   async function poll() {
     try {
-      const v = await getVersion();
-      if (v && ver && v.app !== ver.app) { RB.beforeReload && RB.beforeReload(); location.reload(); return; }
-      if (v && (!ver || v.data !== ver.data)) {
-        const data = JSON.parse(await getText("data.json"));
-        ver = v; RB.sha = v.data;
-        RB.onRemote && RB.onRemote(data, v.data);
+      const sha = await latestSha();
+      if (sha && sha !== RB.sha){
+        const code = await getText(sha, "app.js");
+        if (code !== appCode){ RB.beforeReload && RB.beforeReload(); location.reload(); return; }
+        const data = JSON.parse(await getText(sha, "data.json"));
+        RB.sha = sha; RB.onRemote && RB.onRemote(data, sha);
       }
     } catch (e) { console.warn("poll", e); }
     setTimeout(poll, document.hidden ? RB.pollMs * 3 : RB.pollMs);

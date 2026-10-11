@@ -464,11 +464,12 @@ async function save(){
       const base = normalize(JSON.parse(unb64(cur.content)));
       const merged = overlay(base, sent);
       try {
-        await gh("contents/data.json", { method: "PUT", body: JSON.stringify({ message: "보드 배치 저장", content: b64(JSON.stringify(merged, null, 1)), sha: cur.sha, branch: RB.branch }) });
+        const put = await gh("contents/data.json", { method: "PUT", body: JSON.stringify({ message: "보드 배치 저장", content: b64(JSON.stringify(merged, null, 1)), sha: cur.sha, branch: RB.branch }) });
+        RB.savedCommit = put && put.commit && put.commit.sha;
         remote = merged;
         try {   // 다른 기기들이 알아채도록 version.json의 data 값을 바꿔요
           const vf = await gh(`contents/version.json?ref=${RB.branch}`);
-          const v = JSON.parse(unb64(vf.content)); v.data = "web-" + Date.now().toString(36);
+          const v = JSON.parse(unb64(vf.content)); if (RB.savedCommit) v.commit = RB.savedCommit; v.data = "web-" + Date.now().toString(36);
           await gh("contents/version.json", { method: "PUT", body: JSON.stringify({ message: "배치 버전 갱신", content: b64(JSON.stringify(v)), sha: vf.sha, branch: RB.branch }) });
         } catch (e){ console.warn("version bump", e); }
         break;
