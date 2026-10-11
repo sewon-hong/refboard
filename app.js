@@ -544,22 +544,45 @@ function removeSel(){
   sel.clear(); renderAll(); record(before);
   toast(ids.length + "개를 보드에서 뺐어요 · Ctrl+Z로 되돌릴 수 있어요");
 }
+function skyline(rects, W, gap){   // 빈틈이 적게: 각 틀을 지금 가장 낮은 자리에 차례로 놓아요
+  let sky = [[0, 0, W]]; const out = [];
+  for (const [w, h] of rects){
+    const w2 = w + gap; let best = null;
+    for (let i = 0; i < sky.length; i++){
+      const x = sky[i][0]; if (x + w > W + 0.5) break;
+      let y = 0, j = i, cov = 0;
+      while (cov < w2 && j < sky.length){ y = Math.max(y, sky[j][1]); cov = sky[j][0] + sky[j][2] - x; j++; }
+      if (cov < w && x + w > W) continue;
+      if (!best || y < best[1] - 0.5 || (Math.abs(y - best[1]) <= 0.5 && x < best[0])) best = [x, y];
+    }
+    const [x, y] = best; out.push(best);
+    const nx0 = x, nx1 = x + w2; let nw = [];
+    for (const [sx, sy, sw] of sky){ const a = sx, b = sx + sw;
+      if (b <= nx0 || a >= nx1){ nw.push([sx, sy, sw]); continue; }
+      if (a < nx0) nw.push([a, sy, nx0 - a]); if (b > nx1) nw.push([nx1, sy, b - nx1]); }
+    nw.push([nx0, y + h + gap, w2]); nw.sort((p, q) => p[0] - q[0]);
+    sky = []; for (const sg of nw){ const L = sky[sky.length - 1];
+      if (L && Math.abs(L[1] - sg[1]) < 0.5 && Math.abs(L[0] + L[2] - sg[0]) < 0.5) L[2] += sg[2]; else sky.push(sg); }
+  }
+  return out;
+}
 function arrange(){
   const ids = sel.size > 1 ? [...sel] : boardPls().map(p => p.id);
   if (ids.length < 2) return;
   const before = snap(ids);
   const arr = ids.map(id => ({ id, p: data.placements[id], g: geom(data.placements[id]) }));
   const x0 = Math.min(...arr.map(a => a.p.x)), y0 = Math.min(...arr.map(a => a.p.y));
-  const area = arr.reduce((s, a) => s + a.g.w * a.g.h, 0);
-  const rowW = Math.max(Math.sqrt(area) * 1.6, ...arr.map(a => a.g.w));
-  const gap = 16;
-  arr.sort((a, b) => b.g.h - a.g.h || (data.posts[b.p.post]?.created || 0) - (data.posts[a.p.post]?.created || 0));
-  let x = x0, y = y0, rowH = 0;
-  for (const a of arr){
-    if (x > x0 && x + a.g.w > x0 + rowW){ x = x0; y += rowH + gap; rowH = 0; }
-    edit("placements", a.id, { ...a.p, x: Math.round(x), y: Math.round(y) });
-    x += a.g.w + gap; rowH = Math.max(rowH, a.g.h);
+  const area = arr.reduce((s, a) => s + a.g.w * a.g.h, 0), maxW = Math.max(...arr.map(a => a.g.w));
+  arr.sort((a, b) => b.g.h - a.g.h || b.g.w - a.g.w);
+  let best = null;
+  for (const m of [1.1, 1.25, 1.45, 1.7, 2.0]){
+    const W = Math.max(Math.sqrt(area) * m, maxW);
+    const pos = skyline(arr.map(a => [a.g.w, a.g.h]), W, 28);
+    const Wt = Math.max(...pos.map((p, i) => p[0] + arr[i].g.w)), Ht = Math.max(...pos.map((p, i) => p[1] + arr[i].g.h));
+    const score = area / (Wt * Ht) - 0.15 * Math.abs(Math.log((Wt / Ht) / 1.6));
+    if (!best || score > best.score) best = { score, pos };
   }
+  arr.forEach((a, i) => edit("placements", a.id, { ...a.p, x: Math.round(x0 + best.pos[i][0]), y: Math.round(y0 + best.pos[i][1]) }));
   renderAll(); record(before);
   fitRects(ids.map(plRect));
 }
