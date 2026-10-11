@@ -85,6 +85,7 @@ a.btn.link{color:var(--sel)}
 #cappop{left:50%;transform:translateX(-50%);bottom:calc(70px + env(safe-area-inset-bottom,0px));width:min(460px,calc(100vw - 24px));max-height:45vh;overflow:auto;padding:14px 16px}
 #cappop .au{font:500 12px var(--mono);color:var(--sel);margin-bottom:6px}
 #cappop .tx{white-space:pre-wrap;line-height:1.6;word-break:keep-all;overflow-wrap:anywhere}
+.grp .im.psel{outline:calc(3px / var(--s,1)) solid #fff;outline-offset:calc(-3px / var(--s,1));z-index:3}
 #selbar .count{font:500 12px var(--mono);color:var(--mute);padding:0 8px}
 #linkpop{left:50%;transform:translateX(-50%);bottom:calc(70px + env(safe-area-inset-bottom,0px));width:min(420px,calc(100vw - 24px))}
 #tokpop{left:calc(12px + env(safe-area-inset-left,0px));bottom:calc(62px + env(safe-area-inset-bottom,0px));width:min(340px,calc(100vw - 24px));padding:14px}
@@ -118,6 +119,7 @@ const ICON = {
   front:'<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="1.5"/><path d="M4 16V5a1 1 0 0 1 1-1h11"/></svg>',
   zoom:'<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.2-4.2M11 8v6M8 11h6"/></svg>',
   del:'<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>',
+  cols:'<svg viewBox="0 0 24 24"><rect x="3" y="3" width="5" height="11" rx="1"/><rect x="9.5" y="3" width="5" height="7" rx="1"/><rect x="16" y="3" width="5" height="14" rx="1"/><path d="M3 21h18"/></svg>',
   text:'<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>',
   edit:'<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/></svg>'
 };
@@ -132,6 +134,7 @@ const HTML = `
   <div class="sep"></div>
   <button class="btn" id="addBtn" type="button" title="이미지 추가">${ICON.plus}<span class="tx">이미지</span></button>
   <button class="btn" id="arrangeBtn" type="button" title="정렬 (A)">${ICON.grid}<span class="tx">정렬</span></button>
+  <button class="btn" id="alignBtn" type="button" title="가로 맞춤 정렬 (G): 폭을 같게 맞추고 왼쪽·위쪽 선을 맞춰요">${ICON.cols}<span class="tx">맞춤 정렬</span></button>
   <button class="btn" id="fitBtn" type="button" title="모두 보기 (F)">${ICON.fit}<span class="tx">모두 보기</span></button>
   <div class="sep"></div>
   <button class="btn" id="helpBtn" type="button" title="조작법" aria-label="조작법">${ICON.help}</button>
@@ -150,6 +153,10 @@ const HTML = `
   <button class="btn" id="foldBtn" type="button">${ICON.grid}<span>펼치기</span></button>
   <button class="btn" id="editLink" type="button">${ICON.chain}<span>링크</span></button>
   <button class="btn" id="frontBtn" type="button" title="맨 앞으로">${ICON.front}<span class="hide-sm">맨 앞</span></button>
+  <span class="count" id="photoCount" hidden></span>
+  <button class="btn" id="photoPrev" type="button" title="이전 사진 (←)" hidden>‹</button>
+  <button class="btn" id="photoNext" type="button" title="다음 사진 (→)" hidden>›</button>
+  <a class="btn" id="photoOpen" href="#" target="_blank" rel="noopener" hidden>${ICON.ext}<span class="hide-sm">원본 사진</span></a>
   <button class="btn" id="zoomSel" type="button" title="크게 보기">${ICON.zoom}<span class="hide-sm">크게</span></button>
   <div class="sep"></div>
   <button class="btn danger" id="delBtn" type="button" title="보드에서 빼기 (Delete)">${ICON.del}<span class="hide-sm">빼기</span></button>
@@ -174,11 +181,11 @@ const HTML = `
     <dt>빈 곳 드래그</dt><dd>여러 게시글 선택</dd>
     <dt>Shift + 클릭</dt><dd>선택 추가/해제</dd>
     <dt>모서리 점</dt><dd>크기 조절</dd>
-    <dt>더블클릭</dt><dd>그 이미지 크게 · 빈 곳은 모두 보기</dd>
+    <dt>더블클릭</dt><dd>게시글 안의 사진 한 장 선택 (← → 로 이동, Esc로 해제) · 빈 곳은 모두 보기</dd>
     <dt>Ctrl + Z</dt><dd>뒤로가기</dd>
     <dt>Ctrl + Shift + Z</dt><dd>되돌리기</dd>
     <dt>Ctrl + V</dt><dd>이미지 붙여넣기 · 게시글 선택 후 링크를 붙이면 원본 링크로 연결</dd>
-    <dt>F / A</dt><dd>모두 보기 / 자동 정렬</dd>
+    <dt>F / A / G</dt><dd>모두 보기 / 자동 정렬 / 가로 맞춤 정렬</dd>
     <dt>L</dt><dd>작성자 이름 항상 보이기 켜기/끄기</dd>
     <dt>[ / ]</dt><dd>이전 / 다음 보드</dd>
     <dt>Delete</dt><dd>선택한 게시글을 이 보드에서 빼기</dd>
@@ -250,7 +257,7 @@ function geom(pl){
   if (!imgs.length) return { w: Math.round(H * 0.8), h: H, card: true, parts: [], H, TB: 0 };
   // 같은 게시글 안의 사진은 가로 길이를 모두 같게 해요. 열 수 = 한 줄 장수(최대 6), 순서대로 가장 짧은 열에 쌓아요.
   const cols = Math.ceil(imgs.length / Math.ceil(imgs.length / ROW));
-  const cw = H * 0.75, TB = H * 0.2;   // TB: 맨 위 제목 줄 높이
+  const cw = H * 0.75, TB = Math.min(H * 0.2, 60);   // 제목 줄은 크게 키운 틀에서도 같은 크기로   // TB: 맨 위 제목 줄 높이
   const colH = new Array(cols).fill(PAD + TB), parts = [];
   imgs.forEach((im, i) => {
     let c = 0; for (let k = 1; k < cols; k++) if (colH[k] < colH[c] - 0.5) c = k;
@@ -392,13 +399,30 @@ function renderPl(id){
   const hdEl = el.querySelector(".hd"); if (hdEl) hdEl.style.top = (g.TB || 0) + "px";
   const mo = el.querySelector(".more"); if (mo && g.more) Object.assign(mo.style, { left: g.more.x + "px", top: g.more.y + "px", width: g.more.w + "px", height: g.more.h + "px", fontSize: g.H * 0.16 + "px" });
   el.classList.toggle("sel", sel.has(id));
+  if (photoSel && photoSel.id === id){ const m = el.querySelector(`.im[data-i="${photoSel.i}"]`); if (m) m.classList.add("psel"); }
 }
 function renderAll(){
   for (const [id, el] of els){ const p = data.placements[id]; if (!p || p.board !== boardId){ el.remove(); els.delete(id); sel.delete(id); } }
   for (const [id, p] of Object.entries(data.placements)) if (p.board === boardId) renderPl(id);
   renderChrome(); updateResolution();
 }
-function renderSel(){ for (const [id, el] of els) el.classList.toggle("sel", sel.has(id)); renderChrome(); }
+let photoSel = null;   // { id, i } — 더블클릭으로 고른 게시글 안의 사진
+function selectPhoto(id, i){ photoSel = id == null ? null : { id, i }; renderSel(); }
+function paintPhotoSel(){
+  for (const m of world.querySelectorAll(".im.psel")) m.classList.remove("psel");
+  if (!photoSel) return;
+  const el = els.get(photoSel.id); if (!el){ photoSel = null; return; }
+  const m = el.querySelector(`.im[data-i="${photoSel.i}"]`); if (m) m.classList.add("psel");
+}
+function stepPhoto(d){
+  if (!photoSel) return; const pl = data.placements[photoSel.id]; const n = (data.posts[pl.post]?.images || []).length;
+  photoSel.i = (photoSel.i + d + n) % n; renderSel();
+}
+function renderSel(){
+  if (photoSel && !(sel.size === 1 && sel.has(photoSel.id))) photoSel = null;
+  for (const [id, el] of els) el.classList.toggle("sel", sel.has(id));
+  paintPhotoSel(); renderChrome();
+}
 const boardsSorted = () => Object.entries(data.boards).map(([id, b]) => ({ id, ...b })).sort((a, b) => (a.order || 0) - (b.order || 0));
 const countIn = bid => Object.values(data.placements).filter(p => p.board === bid).length;
 
@@ -415,6 +439,9 @@ function renderChrome(){
     const a = $("#openLink"); a.hidden = !(post && post.link); if (post && post.link) a.href = post.link;
     $("#editLink").hidden = !one;
     $("#capBtn").hidden = !(post && post.caption);
+    const ph = photoSel && one ? (post.images || [])[photoSel.i] : null;
+    for (const id of ["photoCount", "photoPrev", "photoNext", "photoOpen"]) $("#" + id).hidden = !ph;
+    if (ph){ $("#photoCount").textContent = `사진 ${photoSel.i + 1}/${post.images.length}`; $("#photoOpen").href = ph.v ? vidURL(ph.v) : imgURL(ph.f, 2); }
     const og = one ? geom(one) : null;
     $("#foldBtn").hidden = !(og && og.total > FOLD);
     if (og) $("#foldBtn span").textContent = one.open ? "접기" : "펼치기";
@@ -594,6 +621,33 @@ function shelf(rects, W, gap){   // 줄마다 윗선을 맞춰 차례로 놓아�
     out.push([x, y]); x += w + gap; rowH = Math.max(rowH, h);
   }
   return out;
+}
+function hForWidth(pl, W){   // 게시글 틀의 폭이 W가 되는 크기(h)를 찾아요 (폭은 h에 비례해요)
+  const w1 = geom({ ...pl, h: 100 }).w, w2 = geom({ ...pl, h: 200 }).w;
+  return Math.max(30, 100 + (W - w1) * 100 / (w2 - w1));
+}
+function alignGrid(){   // 가로 맞춤 정렬: 모든 틀의 폭을 같게 맞추고, 열(왼쪽 선)과 줄(위쪽 선)을 맞춰 배치
+  const ids = sel.size > 1 ? [...sel] : boardPls().map(p => p.id);
+  if (ids.length < 2) return;
+  const before = snap(ids);
+  const arr = ids.map(id => ({ id, p: data.placements[id] }));
+  arr.sort((a, b) => (data.posts[b.p.post]?.created || 0) - (data.posts[a.p.post]?.created || 0));
+  const widths = arr.map(a => geom(a.p).w).sort((a, b) => a - b);
+  const W = widths[Math.floor(widths.length / 2)];   // 지금 폭들의 중간값으로 통일
+  const x0 = Math.min(...arr.map(a => a.p.x)), y0 = Math.min(...arr.map(a => a.p.y));
+  const sized = arr.map(a => { const h = hForWidth(a.p, W); return { ...a, h, g: geom({ ...a.p, h }) }; });
+  const area = sized.reduce((s, a) => s + W * a.g.h, 0);
+  let cols = Math.max(1, Math.round(Math.sqrt(area * 1.6) / (W + GAP_POST)));
+  cols = Math.min(cols, sized.length);
+  let y = 0;
+  for (let r = 0; r < sized.length; r += cols){
+    const row = sized.slice(r, r + cols); let rowH = 0;
+    row.forEach((a, c) => { edit("placements", a.id, { ...a.p, h: Math.round(a.h * 10) / 10, x: Math.round(x0 + c * (W + GAP_POST)), y: Math.round(y0 + y) }); rowH = Math.max(rowH, a.g.h); });
+    y += rowH + GAP_POST;
+  }
+  renderAll(); record(before); updateResolution();
+  fitRects(ids.map(plRect));
+  toast("폭을 맞추고 왼쪽·위쪽 선에 맞춰 정렬했어요 · Ctrl+Z로 되돌릴 수 있어요");
 }
 function arrange(){
   const ids = sel.size > 1 ? [...sel] : boardPls().map(p => p.id);
@@ -785,18 +839,22 @@ stage.addEventListener("pointercancel", onUp);
 let lastTap = { t: 0, key: null, x: 0, y: 0 };
 stage.addEventListener("pointerup", e => {
   if (e.button !== 0) return;
-  const grp = e.target.closest && e.target.closest(".grp");
+  const under = document.elementFromPoint(e.clientX, e.clientY);   // 포인터 캡처 때문에 e.target은 항상 stage라서 실제 아래 요소를 찾아요
+  const grp = under && under.closest && under.closest(".grp");
   let key = null, rect = null;
   if (grp){
     const id = grp.dataset.id, p = data.placements[id]; const geo = geom(p);
     const w = toWorld(e.clientX, e.clientY);
-    const part = geo.parts.find(pt => w.x >= p.x + pt.x && w.x <= p.x + pt.x + pt.w);
-    key = id + ":" + (part ? geo.parts.indexOf(part) : "all");
-    rect = part ? { x: p.x + part.x, y: p.y + part.y, w: part.w, h: part.h } : { x: p.x, y: p.y, w: geo.w, h: geo.h };
+    const part = geo.parts.find(pt => w.x >= p.x + pt.x && w.x <= p.x + pt.x + pt.w && w.y >= p.y + pt.y && w.y <= p.y + pt.y + pt.h);
+    key = id + ":" + (part ? part.i : "all");
+    rect = part ? { id, i: part.i } : null;
   }
   const now = performance.now();
   if (now - lastTap.t < 320 && lastTap.key === key && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 20){
-    lastTap.t = 0; if (rect) fitRects([rect], 10); else fitAll(); return;
+    lastTap.t = 0;
+    if (rect){ sel.clear(); sel.add(rect.id); selectPhoto(rect.id, rect.i); }   // 게시글 안 사진 한 장 선택
+    else if (!grp) fitAll();
+    return;
   }
   lastTap = { t: now, key, x: e.clientX, y: e.clientY };
 });
@@ -823,7 +881,10 @@ addEventListener("keydown", e => {
   if (mod) return;
   switch (e.key){
     case "Delete": case "Backspace": e.preventDefault(); removeSel(); break;
-    case "Escape": closePops(); if (sel.size){ sel.clear(); renderSel(); } break;
+    case "Escape": closePops(); if (photoSel){ selectPhoto(null); break; } if (sel.size){ sel.clear(); renderSel(); } break;
+    case "ArrowLeft": if (photoSel){ e.preventDefault(); stepPhoto(-1); } break;
+    case "ArrowRight": if (photoSel){ e.preventDefault(); stepPhoto(1); } break;
+    case "g": case "G": alignGrid(); break;
     case "f": case "F": sel.size ? fitSel() : fitAll(); break;
     case "a": case "A": arrange(); break;
     case "l": case "L": document.body.classList.toggle("labels"); LS.set("rb.labels", document.body.classList.contains("labels")); break;
@@ -887,13 +948,19 @@ $("#newBoard").onsubmit = e => { e.preventDefault(); const v = $("#newBoardName"
 $("#addBtn").onclick = () => $("#fileIn").click();
 $("#fitBtn").onclick = fitAll;
 $("#arrangeBtn").onclick = arrange;
+$("#alignBtn").onclick = alignGrid;
 $("#undoBtn").onclick = undo;
 $("#redoBtn").onclick = redo;
 $("#zoomIn").onclick = () => zoomAt(innerWidth / 2, innerHeight / 2, 1.25);
 $("#zoomOut").onclick = () => zoomAt(innerWidth / 2, innerHeight / 2, 0.8);
 $("#zoom").onclick = () => zoomAt(innerWidth / 2, innerHeight / 2, 1 / view.s);
 $("#frontBtn").onclick = () => bringFront([...sel]);
-$("#zoomSel").onclick = fitSel;
+$("#zoomSel").onclick = () => {
+  if (photoSel){ const p = data.placements[photoSel.id], pt = geom(p).parts.find(q => q.i === photoSel.i); if (pt) return fitRects([{ x: p.x + pt.x, y: p.y + pt.y, w: pt.w, h: pt.h }], 10); }
+  fitSel();
+};
+$("#photoPrev").onclick = () => stepPhoto(-1);
+$("#photoNext").onclick = () => stepPhoto(1);
 $("#delBtn").onclick = removeSel;
 $("#capBtn").onclick = showCaption;
 $("#foldBtn").onclick = () => { if (sel.size === 1) toggleFold([...sel][0]); };
