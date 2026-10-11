@@ -22,13 +22,18 @@ button{cursor:pointer}
 #stage.panning{cursor:grabbing}#stage.space{cursor:grab}
 #world{position:absolute;left:0;top:0;transform-origin:0 0}
 .grp{position:absolute;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;background:var(--panel);border-radius:5px;box-shadow:0 0 0 1px var(--line)}
-.grp .hd{position:absolute;left:0;right:0;top:0;height:30px;display:flex;align-items:center;gap:8px;padding:0 8px;font:500 13px var(--mono);color:var(--mute);white-space:nowrap;overflow:hidden}
-.grp .hd .au{color:var(--fg);overflow:hidden;text-overflow:ellipsis}
-.grp .hd .n{margin-left:auto;font-size:12px;flex:none}
-.grp .hd .lk{width:7px;height:7px;border-radius:50%;background:var(--sel);flex:none}
+.grp .hd{position:absolute;left:0;right:0;top:0;display:flex;align-items:center;gap:.6em;padding:.45em .7em;font:500 min(calc(12px / var(--s,1)), var(--fh,12px))/1.2 var(--mono);color:#fff;white-space:nowrap;overflow:hidden;
+  background:linear-gradient(rgba(10,10,12,.78),rgba(10,10,12,0));border-radius:5px 5px 0 0;opacity:0;transition:opacity .15s;pointer-events:none;z-index:2}
+.grp:hover .hd,.grp.sel .hd,body.labels .grp .hd,.grp.card .hd{opacity:1}
+.grp .hd .au{overflow:hidden;text-overflow:ellipsis}
+.grp .hd .n{margin-left:auto;flex:none;opacity:.75}
+.grp .hd .lk{width:.55em;height:.55em;border-radius:50%;background:var(--sel);flex:none}
+.grp .more{position:absolute;display:grid;place-items:center;background:var(--panel-2);color:var(--fg);font-family:var(--mono);border-radius:2px;cursor:pointer}
+.grp .more:hover{background:var(--line)}
+.grp .vb{position:absolute;width:0;height:0;border-left:calc(9px / var(--s,1)) solid rgba(255,255,255,.85);border-top:calc(6px / var(--s,1)) solid transparent;border-bottom:calc(6px / var(--s,1)) solid transparent;transform:translateY(-100%);pointer-events:none;z-index:1;filter:drop-shadow(0 0 2px rgba(0,0,0,.6))}
 .grp .im{position:absolute;display:block;object-fit:cover;pointer-events:none;-webkit-user-drag:none;background:var(--bg);border-radius:2px}
 .grp .im.err{opacity:.2}
-.grp .cap{position:absolute;left:10px;right:10px;top:38px;bottom:28px;font-size:15px;line-height:1.5;overflow:hidden;display:-webkit-box;-webkit-line-clamp:9;-webkit-box-orient:vertical;word-break:keep-all;overflow-wrap:anywhere}
+.grp .cap{position:absolute;left:12px;right:12px;top:40px;bottom:30px;font-size:15px;line-height:1.5;overflow:hidden;display:-webkit-box;-webkit-line-clamp:9;-webkit-box-orient:vertical;word-break:keep-all;overflow-wrap:anywhere}
 .grp .hint{position:absolute;left:10px;bottom:8px;font-size:11px;color:var(--mute)}
 .grp.card{background:repeating-linear-gradient(135deg,var(--panel) 0 14px,#2d2f33 14px 15px)}
 .grp.sel{box-shadow:0 0 0 calc(2px / var(--s,1)) var(--sel)}
@@ -75,6 +80,9 @@ a.btn.link{color:var(--sel)}
 .row .field{flex:1}
 .newb{padding:8px 2px 2px;border-top:1px solid var(--line);margin-top:6px}
 #selbar{left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom,0px));max-width:calc(100vw - 24px);overflow-x:auto}
+#cappop{left:50%;transform:translateX(-50%);bottom:calc(70px + env(safe-area-inset-bottom,0px));width:min(460px,calc(100vw - 24px));max-height:45vh;overflow:auto;padding:14px 16px}
+#cappop .au{font:500 12px var(--mono);color:var(--sel);margin-bottom:6px}
+#cappop .tx{white-space:pre-wrap;line-height:1.6;word-break:keep-all;overflow-wrap:anywhere}
 #selbar .count{font:500 12px var(--mono);color:var(--mute);padding:0 8px}
 #linkpop{left:50%;transform:translateX(-50%);bottom:calc(70px + env(safe-area-inset-bottom,0px));width:min(420px,calc(100vw - 24px))}
 #tokpop{left:calc(12px + env(safe-area-inset-left,0px));bottom:calc(62px + env(safe-area-inset-bottom,0px));width:min(340px,calc(100vw - 24px));padding:14px}
@@ -108,6 +116,7 @@ const ICON = {
   front:'<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="1.5"/><path d="M4 16V5a1 1 0 0 1 1-1h11"/></svg>',
   zoom:'<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.2-4.2M11 8v6M8 11h6"/></svg>',
   del:'<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>',
+  text:'<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>',
   edit:'<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/></svg>'
 };
 const HTML = `
@@ -135,12 +144,15 @@ const HTML = `
 <div class="ui bar" id="selbar" hidden>
   <span class="count" id="selCount"></span>
   <a class="btn link" id="openLink" href="#" target="_blank" rel="noopener">${ICON.ext}원본 보기</a>
+  <button class="btn" id="capBtn" type="button">${ICON.text}<span class="hide-sm">캡션</span></button>
+  <button class="btn" id="foldBtn" type="button">${ICON.grid}<span>펼치기</span></button>
   <button class="btn" id="editLink" type="button">${ICON.chain}<span>링크</span></button>
   <button class="btn" id="frontBtn" type="button" title="맨 앞으로">${ICON.front}<span class="hide-sm">맨 앞</span></button>
   <button class="btn" id="zoomSel" type="button" title="크게 보기">${ICON.zoom}<span class="hide-sm">크게</span></button>
   <div class="sep"></div>
   <button class="btn danger" id="delBtn" type="button" title="보드에서 빼기 (Delete)">${ICON.del}<span class="hide-sm">빼기</span></button>
 </div>
+<div class="pop" id="cappop" hidden><div class="au"></div><div class="tx"></div></div>
 <form class="pop row" id="linkpop" hidden><input class="field" id="linkInput" type="url" placeholder="인스타 게시글 링크" autocomplete="off"><button class="btn primary" type="submit">저장</button></form>
 <div class="pop" id="boards" hidden>
   <div class="lbl">컬렉션 보드</div><div id="blist"></div>
@@ -164,9 +176,11 @@ const HTML = `
     <dt>Ctrl + Shift + Z</dt><dd>되돌리기</dd>
     <dt>Ctrl + V</dt><dd>이미지 붙여넣기 · 게시글 선택 후 링크를 붙이면 원본 링크로 연결</dd>
     <dt>F / A</dt><dd>모두 보기 / 자동 정렬</dd>
+    <dt>L</dt><dd>작성자 이름 항상 보이기 켜기/끄기</dd>
+    <dt>[ / ]</dt><dd>이전 / 다음 보드</dd>
     <dt>Delete</dt><dd>선택한 게시글을 이 보드에서 빼기</dd>
   </dl>
-  <p>한 게시글의 이미지들은 하나의 틀 안에 나란히 붙어 있고, 위쪽에 작성자 계정이 표시돼요. 휴대폰에서는 두 손가락으로 확대하고 한 손가락으로 빈 곳을 끌어 이동해요.</p>
+  <p>한 게시글의 이미지와 영상은 하나의 틀 안에 나란히 붙어 있어요. 마우스를 올리면 작성자 계정이 보이고, 7장 이상인 게시글은 "+숫자" 칸을 눌러 펼칠 수 있어요. 휴대폰에서는 두 손가락으로 확대하고 한 손가락으로 빈 곳을 끌어 이동해요.</p>
 </div>
 <div id="drop"><span>여기에 놓으면 보드에 추가돼요</span></div>
 <div class="ui" id="toast" aria-live="polite"></div>
@@ -223,15 +237,25 @@ function toast(msg, opts = {}){
 }
 
 /* ================= geometry ================= */
-const HEAD = 30, GAP = 6, PAD = 6;
+/* 게시글 틀: 이미지들을 같은 높이로 가로로 붙여요. 7장 이상이면 앞 5장 + "+N" 칸으로 접고,
+   펼치면 6장씩 줄을 바꿔요. 머리줄(작성자)은 공간을 차지하지 않고 마우스를 올릴 때만 위에 겹쳐 떠요. */
+const GAP = 4, PAD = 4, FOLD = 6, ROW = 6;
 function geom(pl){
   const p = data.posts[pl.post] || {};
   const H = pl.h || 300;
   const imgs = p.images || [];
-  if (!imgs.length) return { w: Math.round(H * 0.8), h: H + HEAD, card: true, parts: [] };
-  let x = PAD; const parts = [];
-  for (const im of imgs){ const w = im.w / im.h * H; parts.push({ x, y: HEAD, w, h: H, im }); x += w + GAP; }
-  return { w: x - GAP + PAD, h: HEAD + H + PAD, parts };
+  if (!imgs.length) return { w: Math.round(H * 0.8), h: H, card: true, parts: [], H };
+  const folded = imgs.length > FOLD && !pl.open;
+  const shown = folded ? imgs.slice(0, FOLD - 1) : imgs;
+  const parts = []; let x = PAD, y = PAD, maxW = 0, col = 0;
+  shown.forEach((im, i) => {
+    if (!folded && col === ROW){ maxW = Math.max(maxW, x - GAP); x = PAD; y += H + GAP; col = 0; }
+    const w = im.w / im.h * H; parts.push({ x, y, w, h: H, im, i }); x += w + GAP; col++;
+  });
+  let more = null;
+  if (folded){ more = { x, y, w: H * 0.55, h: H, n: imgs.length - shown.length }; x += more.w + GAP; }
+  maxW = Math.max(maxW, x - GAP);
+  return { w: maxW + PAD, h: y + H + PAD, parts, more, H, total: imgs.length, folded };
 }
 const boardPls = () => Object.entries(data.placements).filter(([, p]) => p.board === boardId).map(([id, p]) => ({ id, ...p, g: geom(p) }));
 const plRect = id => { const p = data.placements[id]; if (!p) return null; const g = geom(p); return { x: p.x, y: p.y, w: g.w, h: g.h }; };
@@ -290,41 +314,64 @@ function updateResolution(){
     const visible = sx < innerWidth && sy < innerHeight && sx + g.w * view.s > 0 && sy + g.h * view.s > 0;
     for (const img of el.querySelectorAll("img.im")) setImg(img, img.dataset.f, big && visible);
   }
+  updateVideos();
 }
 
 /* ================= render ================= */
 function maxZ(){ let m = 0; for (const p of Object.values(data.placements)) if (p.board === boardId) m = Math.max(m, p.z || 0); return m; }
+const vidURL = f => "vid/" + f;
+const vidRaw = f => RB.local ? vidURL(f) : `https://raw.githubusercontent.com/${RB.owner}/${RB.repo}/${RB.branch}/vid/${f}`;
+const playIO = "IntersectionObserver" in window ? new IntersectionObserver(es => { for (const e of es) e.target._vis = e.isIntersecting; updateVideos(); }) : null;
+function updateVideos(){
+  for (const v of world.querySelectorAll("video.im")){
+    const big = v._vis !== false && v.getBoundingClientRect().width > 90;
+    if (big){ if (!v.src) v.src = vidURL(v.dataset.v); if (v.paused) v.play().catch(() => {}); }
+    else if (!v.paused) v.pause();
+  }
+}
 function renderPl(id){
   const p = data.placements[id]; if (!p) return;
   const post = data.posts[p.post] || {};
   const g = geom(p);
-  const sig = JSON.stringify([post.images, post.author, post.caption, post.link, g.card]);
+  const sig = JSON.stringify([post.images, post.author, post.caption, post.link, g.card, g.folded]);
   let el = els.get(id);
   if (el && el.dataset.sig !== sig){ el.remove(); els.delete(id); el = null; }
   if (!el){
     el = document.createElement("div"); el.className = "grp" + (g.card ? " card" : ""); el.dataset.id = id; el.dataset.sig = sig;
-    const hd = document.createElement("div"); hd.className = "hd";
-    const au = document.createElement("span"); au.className = "au"; au.textContent = post.author ? "@" + post.author : (post.link ? "인스타 게시글" : "내 이미지");
-    hd.append(au);
-    if (post.link){ const lk = document.createElement("i"); lk.className = "lk"; hd.prepend(lk); }
-    const n = document.createElement("span"); n.className = "n"; n.textContent = g.card ? "이미지 없음" : (g.parts.length > 1 ? g.parts.length + "장" : ""); hd.append(n);
-    el.append(hd);
     if (g.card){
       const cap = document.createElement("div"); cap.className = "cap"; cap.textContent = post.caption || ""; el.append(cap);
       const hint = document.createElement("div"); hint.className = "hint"; hint.textContent = "이미지를 아직 못 받았어요"; el.append(hint);
-    } else g.parts.forEach((pt, i) => {
-      const img = new Image(); img.className = "im"; img.alt = ""; img.draggable = false; img.decoding = "async"; img.dataset.i = i;
-      img.addEventListener("error", onImgError);
-      setImg(img, pt.im.f, false);
-      el.append(img);
+    } else g.parts.forEach(pt => {
+      let m;
+      if (pt.im.v){
+        m = document.createElement("video"); m.className = "im"; m.muted = true; m.loop = true; m.playsInline = true; m.preload = "none";
+        m.setAttribute("muted", ""); m.setAttribute("playsinline", "");
+        m.dataset.v = pt.im.v; m.poster = imgURL(pt.im.f, false);
+        m.addEventListener("error", () => { if (!m.dataset.retried){ m.dataset.retried = 1; m.src = vidRaw(m.dataset.v); } });
+        const badge = document.createElement("i"); badge.className = "vb"; badge.dataset.i = pt.i; el.append(badge);
+        playIO && playIO.observe(m);
+      } else {
+        m = new Image(); m.alt = ""; m.draggable = false; m.decoding = "async"; m.className = "im";
+        m.addEventListener("error", onImgError); setImg(m, pt.im.f, false);
+      }
+      m.dataset.i = pt.i; el.append(m);
     });
+    if (g.more){ const mo = document.createElement("div"); mo.className = "more"; mo.textContent = "+" + g.more.n; el.append(mo); }
+    const hd = document.createElement("div"); hd.className = "hd";
+    if (post.link){ const lk = document.createElement("i"); lk.className = "lk"; hd.append(lk); }
+    const au = document.createElement("span"); au.className = "au"; au.textContent = post.author ? "@" + post.author : (post.link ? "인스타 게시글" : "내 이미지");
+    const n = document.createElement("span"); n.className = "n"; n.textContent = g.card ? "이미지 없음" : (g.total > 1 ? g.total + "장" : "");
+    hd.append(au, n); el.append(hd);
     const h = document.createElement("i"); h.className = "h"; el.append(h);
     world.append(el); els.set(id, el);
   }
   el.style.left = p.x + "px"; el.style.top = p.y + "px";
   el.style.width = g.w + "px"; el.style.height = g.h + "px"; el.style.zIndex = p.z || 0;
-  const imgs = el.querySelectorAll("img.im");
-  g.parts.forEach((pt, i) => { const im = imgs[i]; if (!im) return; im.style.left = pt.x + "px"; im.style.top = pt.y + "px"; im.style.width = pt.w + "px"; im.style.height = pt.h + "px"; });
+  el.style.setProperty("--fh", Math.max(8, g.H * 0.09) + "px");
+  const media = el.querySelectorAll(".im");
+  g.parts.forEach((pt, i) => { const m = media[i]; if (!m) return; Object.assign(m.style, { left: pt.x + "px", top: pt.y + "px", width: pt.w + "px", height: pt.h + "px" }); });
+  for (const b of el.querySelectorAll(".vb")){ const pt = g.parts[+b.dataset.i]; if (pt) Object.assign(b.style, { left: (pt.x + 6) + "px", top: (pt.y + pt.h - 6) + "px" }); }
+  const mo = el.querySelector(".more"); if (mo && g.more) Object.assign(mo.style, { left: g.more.x + "px", top: g.more.y + "px", width: g.more.w + "px", height: g.more.h + "px", fontSize: g.H * 0.16 + "px" });
   el.classList.toggle("sel", sel.has(id));
 }
 function renderAll(){
@@ -348,8 +395,12 @@ function renderChrome(){
     const post = one ? data.posts[one.post] : null;
     const a = $("#openLink"); a.hidden = !(post && post.link); if (post && post.link) a.href = post.link;
     $("#editLink").hidden = !one;
+    $("#capBtn").hidden = !(post && post.caption);
+    const og = one ? geom(one) : null;
+    $("#foldBtn").hidden = !(og && og.total > FOLD);
+    if (og) $("#foldBtn span").textContent = one.open ? "접기" : "펼치기";
     $("#editLink span").textContent = post && post.link ? "링크 수정" : "링크 달기";
-  } else $("#linkpop").hidden = true;
+  } else { $("#linkpop").hidden = true; $("#cappop").hidden = true; }
   const empty = $("#empty");
   const n = b ? countIn(boardId) : 0;
   empty.hidden = !!n;
@@ -508,6 +559,25 @@ function arrange(){
   renderAll(); record(before);
   fitRects(ids.map(plRect));
 }
+function toggleFold(id){
+  const p = data.placements[id]; if (!p) return;
+  const before = snap([id]);
+  edit("placements", id, { ...p, open: !p.open, z: maxZ() + 1 });
+  renderAll(); record(before);
+}
+function showCaption(){
+  const cp = $("#cappop"); if (!cp.hidden){ cp.hidden = true; return; }
+  const pl = data.placements[[...sel][0]]; const post = pl && data.posts[pl.post]; if (!post) return;
+  cp.querySelector(".au").textContent = post.author ? "@" + post.author : "";
+  cp.querySelector(".tx").textContent = post.caption || "";
+  $("#linkpop").hidden = true; cp.hidden = false;
+}
+function stepBoard(d){
+  const bs = boardsSorted(); if (!bs.length) return;
+  const i = Math.max(0, bs.findIndex(b => b.id === boardId));
+  openBoard(bs[(i + d + bs.length) % bs.length].id);
+  toast(data.boards[boardId].name, { ms: 1200 });
+}
 function setLink(id, url){
   const pl = data.placements[id]; if (!pl) return;
   const post = data.posts[pl.post] || {};
@@ -581,7 +651,7 @@ stage.addEventListener("pointerdown", e => {
     else if (!sel.has(id)){ sel.clear(); sel.add(id); }
     renderSel();
     const ids = [...sel];
-    g = { type: "move", ...base, clickId: id, add, before: snap(ids), starts: ids.map(i => ({ id: i, x: data.placements[i].x, y: data.placements[i].y })) };
+    g = { type: "move", ...base, clickId: id, add, more: e.target.classList.contains("more"), before: snap(ids), starts: ids.map(i => ({ id: i, x: data.placements[i].x, y: data.placements[i].y })) };
     gesturing = true; return;
   }
   if (e.pointerType === "touch"){ g = { type: "pan", ...base, vx: view.x, vy: view.y, tapClear: true }; return; }
@@ -628,7 +698,8 @@ function endGesture(cancelled){
     if (t.moved){
       for (const s of t.starts){ const p = data.placements[s.id]; if (p) edit("placements", s.id, { ...p, x: Math.round(p.x), y: Math.round(p.y) }); }
       record(t.before);
-    } else if (!cancelled && !t.add && sel.size > 1){ sel.clear(); sel.add(t.clickId); renderSel(); }
+    } else if (!cancelled && t.more){ toggleFold(t.clickId); }
+    else if (!cancelled && !t.add && sel.size > 1){ sel.clear(); sel.add(t.clickId); renderSel(); }
   } else if (t.type === "resize"){
     const p = data.placements[t.id];
     if (t.moved && p){ edit("placements", t.id, { ...p, h: Math.round(p.h) }); record(t.before); updateResolution(); }
@@ -691,6 +762,9 @@ addEventListener("keydown", e => {
     case "Escape": closePops(); if (sel.size){ sel.clear(); renderSel(); } break;
     case "f": case "F": sel.size ? fitSel() : fitAll(); break;
     case "a": case "A": arrange(); break;
+    case "l": case "L": document.body.classList.toggle("labels"); LS.set("rb.labels", document.body.classList.contains("labels")); break;
+    case "[": stepBoard(-1); break;
+    case "]": stepBoard(1); break;
     case "+": case "=": zoomAt(innerWidth / 2, innerHeight / 2, 1.25); break;
     case "-": zoomAt(innerWidth / 2, innerHeight / 2, 0.8); break;
     case "0": zoomAt(innerWidth / 2, innerHeight / 2, 1 / view.s); break;
@@ -724,7 +798,7 @@ $("#fileIn").addEventListener("change", e => { const f = [...e.target.files]; e.
 
 /* ================= chrome wiring ================= */
 function closePops(){
-  for (const id of ["boards", "help", "linkpop", "tokpop"]) $("#" + id).hidden = true;
+  for (const id of ["boards", "help", "linkpop", "tokpop", "cappop"]) $("#" + id).hidden = true;
   $("#boardBtn").setAttribute("aria-expanded", "false");
   armDelete = null; editing = null;
 }
@@ -757,6 +831,8 @@ $("#zoom").onclick = () => zoomAt(innerWidth / 2, innerHeight / 2, 1 / view.s);
 $("#frontBtn").onclick = () => bringFront([...sel]);
 $("#zoomSel").onclick = fitSel;
 $("#delBtn").onclick = removeSel;
+$("#capBtn").onclick = showCaption;
+$("#foldBtn").onclick = () => { if (sel.size === 1) toggleFold([...sel][0]); };
 $("#editLink").onclick = () => {
   const lp = $("#linkpop"); if (!lp.hidden){ lp.hidden = true; return; }
   const pl = data.placements[[...sel][0]]; if (!pl) return;
@@ -770,6 +846,7 @@ $("#linkpop").onsubmit = e => {
 addEventListener("resize", applyView);
 
 /* ================= boot ================= */
+if (LS.get("rb.labels")) document.body.classList.add("labels");
 const last = LS.get("rb.board");
 const firstBoard = data.boards[last] ? last : boardsSorted()[0]?.id;
 if (firstBoard) openBoard(firstBoard); else { renderAll(); applyView(); }
