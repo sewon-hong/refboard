@@ -244,20 +244,17 @@ function geom(pl){
   const H = pl.h || 300;
   const imgs = p.images || [];
   if (!imgs.length) return { w: Math.round(H * 0.8), h: H, card: true, parts: [], H };
-  // 줄 수 = ceil(n/6), 장수를 고르게 나누고(8장 → 4+4), 줄마다 높이를 맞춰 모든 줄의 폭을 같게 해요 (빈틈 없는 직사각형)
-  const nRows = Math.ceil(imgs.length / ROW), base = Math.floor(imgs.length / nRows), extra = imgs.length % nRows;
-  const rows = []; let k = 0;
-  for (let r = 0; r < nRows; r++){ const c = base + (r < extra ? 1 : 0); rows.push(imgs.slice(k, k + c).map((im, j) => ({ im, i: k + j }))); k += c; }
-  const asp = row => row.reduce((s, o) => s + o.im.w / o.im.h, 0);
-  const innerW = rows.reduce((s, row) => s + asp(row) * H + GAP * (row.length - 1), 0) / nRows;
-  const parts = []; let y = PAD;
-  for (const row of rows){
-    const rh = (innerW - GAP * (row.length - 1)) / asp(row);
-    let x = PAD;
-    for (const o of row){ const w = o.im.w / o.im.h * rh; parts.push({ x, y, w, h: rh, im: o.im, i: o.i }); x += w + GAP; }
-    y += rh + GAP;
-  }
-  return { w: innerW + PAD * 2, h: y - GAP + PAD, parts, more: null, H, total: imgs.length, folded: false };
+  // 같은 게시글 안의 사진은 가로 길이를 모두 같게 해요. 열 수 = 한 줄 장수(최대 6), 순서대로 가장 짧은 열에 쌓아요.
+  const cols = Math.ceil(imgs.length / Math.ceil(imgs.length / ROW));
+  const cw = H * 0.75;
+  const colH = new Array(cols).fill(PAD), parts = [];
+  imgs.forEach((im, i) => {
+    let c = 0; for (let k = 1; k < cols; k++) if (colH[k] < colH[c] - 0.5) c = k;
+    const h = cw * im.h / im.w;
+    parts.push({ x: PAD + c * (cw + GAP), y: colH[c], w: cw, h, im, i });
+    colH[c] += h + GAP;
+  });
+  return { w: PAD * 2 + cols * cw + (cols - 1) * GAP, h: Math.max(...colH) - GAP + PAD, parts, more: null, H, total: imgs.length, folded: false };
 }
 const boardPls = () => Object.entries(data.placements).filter(([, p]) => p.board === boardId).map(([id, p]) => ({ id, ...p, g: geom(p) }));
 const plRect = id => { const p = data.placements[id]; if (!p) return null; const g = geom(p); return { x: p.x, y: p.y, w: g.w, h: g.h }; };
