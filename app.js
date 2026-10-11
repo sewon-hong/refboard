@@ -21,14 +21,15 @@ button{cursor:pointer}
 #stage{position:fixed;inset:0;overflow:hidden;touch-action:none;background-color:var(--bg);background-image:radial-gradient(circle,var(--dot) 1px,transparent 1.3px)}
 #stage.panning{cursor:grabbing}#stage.space{cursor:grab}
 #world{position:absolute;left:0;top:0;transform-origin:0 0}
-.grp{position:absolute;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;background:var(--panel);border-radius:5px;box-shadow:0 0 0 1px var(--line)}
+.grp{position:absolute;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;background:var(--panel);border-radius:5px;contain:layout paint style}
 .grp .hd{position:absolute;left:0;right:0;top:0;display:flex;align-items:center;gap:.6em;padding:.45em .7em;font:500 min(calc(12px / var(--s,1)), var(--fh,12px))/1.2 var(--mono);color:#fff;white-space:nowrap;overflow:hidden;
   background:linear-gradient(rgba(10,10,12,.78),rgba(10,10,12,0));opacity:0;transition:opacity .15s;pointer-events:none;z-index:2}
 .grp:hover .hd,.grp.sel .hd,body.labels .grp .hd,.grp.card .hd{opacity:1}
+@media (hover:none){.grp .hd{display:none}.grp.sel .hd{display:flex}}
 .grp .hd .au{overflow:hidden;text-overflow:ellipsis}
 .grp .hd .n{margin-left:auto;flex:none;opacity:.75}
 .grp .hd .lk{width:.55em;height:.55em;border-radius:50%;background:var(--sel);flex:none}
-.grp .ttl{position:absolute;top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--fg);font-weight:600;letter-spacing:-.01em;pointer-events:none}
+.grp .ttl{position:absolute;top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--fg);font-family:"Pretendard Variable",Pretendard,-apple-system,"Apple SD Gothic Neo",sans-serif;font-weight:600;letter-spacing:-.02em;pointer-events:none}
 .grp .more{position:absolute;display:grid;place-items:center;background:var(--panel-2);color:var(--fg);font-family:var(--mono);border-radius:2px;cursor:pointer}
 .grp .more:hover{background:var(--line)}
 .grp .vb{position:absolute;width:0;height:0;border-left:calc(9px / var(--s,1)) solid rgba(255,255,255,.85);border-top:calc(6px / var(--s,1)) solid transparent;border-bottom:calc(6px / var(--s,1)) solid transparent;transform:translateY(-100%);pointer-events:none;z-index:1;filter:drop-shadow(0 0 2px rgba(0,0,0,.6))}
@@ -189,6 +190,7 @@ const HTML = `
 <input type="file" id="fileIn" accept="image/*" multiple hidden>`;
 
 document.getElementById("boot")?.remove();
+if (!document.getElementById("pretendard")){ const lk = document.createElement("link"); lk.id = "pretendard"; lk.rel = "stylesheet"; lk.href = "https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"; document.head.append(lk); }
 const st = document.createElement("style"); st.textContent = CSS; document.head.append(st);
 document.body.insertAdjacentHTML("beforeend", HTML);
 
@@ -240,7 +242,7 @@ function toast(msg, opts = {}){
 
 /* ================= geometry ================= */
 /* 게시글 틀: 이미지들을 같은 높이로 가로로 붙이고, 6장마다 줄을 바꿔 전부 보여줘요. 머리줄(작성자)은 공간을 차지하지 않고 마우스를 올릴 때만 위에 겹쳐 떠요. */
-const GAP = 4, PAD = 4, FOLD = Infinity, ROW = 6;   // 접지 않고 전부 보여줘요. 6장마다 줄을 바꿔요.
+const GAP = 4, PAD = 4, FOLD = Infinity, ROW = 6, GAP_POST = 44;   // 접지 않고 전부 보여줘요. 6장마다 줄을 바꿔요.
 function geom(pl){
   const p = data.posts[pl.post] || {};
   const H = pl.h || 300;
@@ -248,7 +250,7 @@ function geom(pl){
   if (!imgs.length) return { w: Math.round(H * 0.8), h: H, card: true, parts: [], H, TB: 0 };
   // 같은 게시글 안의 사진은 가로 길이를 모두 같게 해요. 열 수 = 한 줄 장수(최대 6), 순서대로 가장 짧은 열에 쌓아요.
   const cols = Math.ceil(imgs.length / Math.ceil(imgs.length / ROW));
-  const cw = H * 0.75, TB = H * 0.13;   // TB: 맨 위 제목 줄 높이
+  const cw = H * 0.75, TB = H * 0.2;   // TB: 맨 위 제목 줄 높이
   const colH = new Array(cols).fill(PAD + TB), parts = [];
   imgs.forEach((im, i) => {
     let c = 0; for (let k = 1; k < cols; k++) if (colH[k] < colH[c] - 0.5) c = k;
@@ -263,9 +265,15 @@ const plRect = id => { const p = data.placements[id]; if (!p) return null; const
 
 /* ================= view ================= */
 let viewSaveT = 0, resT = 0;
-function applyView(){
-  world.style.transform = `translate(${view.x}px,${view.y}px) scale(${view.s})`;
-  world.style.setProperty("--s", view.s);
+let rafPending = false, lastS = 0, sT = 0;
+function applyView(){ if (!rafPending){ rafPending = true; requestAnimationFrame(applyViewNow); } }
+function setS(){ lastS = view.s; world.style.setProperty("--s", view.s); }
+function applyViewNow(){
+  rafPending = false;
+  world.style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s})`;
+  // --s(선택 테두리 두께용)를 매 프레임 바꾸면 모든 틀을 다시 계산해서 버벅여요 → 크게 바뀌었을 때와 멈췄을 때만 갱신
+  if (!lastS || Math.abs(view.s / lastS - 1) > 0.25) setS();
+  clearTimeout(sT); sT = setTimeout(setS, 200);
   let step = 48 * view.s; while (step < 18) step *= 4; while (step > 160) step /= 4;
   stage.style.backgroundSize = `${step}px ${step}px`;
   stage.style.backgroundPosition = `${view.x}px ${view.y}px`;
@@ -292,28 +300,30 @@ const fitAll = () => fitRects(boardPls().map(p => ({ x: p.x, y: p.y, w: p.g.w, h
 const fitSel = () => fitRects([...sel].map(plRect).filter(Boolean), 8);
 
 /* ================= images ================= */
-const imgURL = (f, full) => (full ? "img/" : "thumb/") + f;
+const TIER = ["mini/", "thumb/", "img/"];
+const imgURL = (f, full) => TIER[full === true ? 2 : (full || 0)] + f;
 const rawURL = (f, full) => RB.local ? imgURL(f, full) : `https://raw.githubusercontent.com/${RB.owner}/${RB.repo}/${RB.branch}/${imgURL(f, full)}`;
 function setImg(img, f, full){
   const want = imgURL(f, full);
   if (img.dataset.want === want) return;
-  img.dataset.want = want; img.dataset.f = f; img.dataset.full = full ? 1 : "";
+  img.dataset.want = want; img.dataset.f = f; img.dataset.full = full === true ? 2 : (full || 0);
   img.dataset.tries = "0"; img.classList.remove("err");
   img.src = want;
 }
 function onImgError(e){
-  const img = e.target, tries = +img.dataset.tries || 0, f = img.dataset.f, full = !!img.dataset.full;
+  const img = e.target, tries = +img.dataset.tries || 0, f = img.dataset.f, full = +img.dataset.full || 0;
   if (tries === 0){ img.dataset.tries = "1"; img.src = rawURL(f, full); }          // 방금 올라가서 아직 배포 전인 경우
-  else if (tries === 1 && !full){ img.dataset.tries = "2"; img.src = imgURL(f, true); } // 썸네일이 없으면 원본
+  else if (tries === 1 && full < 2){ img.dataset.tries = "2"; img.src = imgURL(f, full + 1); } // 작은 사진이 없으면 한 단계 큰 사진
   else img.classList.add("err");
 }
 function updateResolution(){
   for (const [id, el] of els){
     const p = data.placements[id]; if (!p) continue;
-    const big = (p.h || 300) * view.s > 520;
     const sx = p.x * view.s + view.x, sy = p.y * view.s + view.y, g = geom(p);
-    const visible = sx < innerWidth && sy < innerHeight && sx + g.w * view.s > 0 && sy + g.h * view.s > 0;
-    for (const img of el.querySelectorAll("img.im")) setImg(img, img.dataset.f, big && visible);
+    const visible = sx < innerWidth * 1.5 && sy < innerHeight * 1.5 && sx + g.w * view.s > -innerWidth * 0.5 && sy + g.h * view.s > -innerHeight * 0.5;
+    const px = (p.h || 300) * 0.75 * view.s * (window.devicePixelRatio || 1);   // 사진 한 장의 실제 화면 폭(픽셀)
+    const tier = !visible ? Math.min(1, px > 200 ? 1 : 0) : px > 900 ? 2 : px > 220 ? 1 : 0;
+    for (const img of el.querySelectorAll("img.im")) setImg(img, img.dataset.f, tier);
   }
   updateVideos();
 }
@@ -323,12 +333,17 @@ function maxZ(){ let m = 0; for (const p of Object.values(data.placements)) if (
 const vidURL = f => "vid/" + f;
 const vidRaw = f => RB.local ? vidURL(f) : `https://raw.githubusercontent.com/${RB.owner}/${RB.repo}/${RB.branch}/vid/${f}`;
 const playIO = "IntersectionObserver" in window ? new IntersectionObserver(es => { for (const e of es) e.target._vis = e.isIntersecting; updateVideos(); }) : null;
+const TOUCH = matchMedia("(pointer: coarse)").matches;
 function updateVideos(){
-  for (const v of world.querySelectorAll("video.im")){
-    const big = v._vis !== false && v.getBoundingClientRect().width > 90;
-    if (big){ if (!v.src) v.src = vidURL(v.dataset.v); if (v.paused) v.play().catch(() => {}); }
+  // 화면에 크게 보이는 영상만, 동시에 최대 3개(휴대폰 2개)까지 재생해요
+  const maxPlay = TOUCH ? 2 : 3, minW = TOUCH ? 160 : 110;
+  const list = [...world.querySelectorAll("video.im")].map(v => ({ v, w: v._vis === false ? 0 : v.getBoundingClientRect().width }));
+  list.sort((a, b) => b.w - a.w);
+  list.forEach(({ v, w }, i) => {
+    const play = !gesturing && w > minW && i < maxPlay;
+    if (play){ if (!v.src) v.src = vidURL(v.dataset.v); if (v.paused) v.play().catch(() => {}); }
     else if (!v.paused) v.pause();
-  }
+  });
 }
 function renderPl(id){
   const p = data.placements[id]; if (!p) return;
@@ -347,13 +362,13 @@ function renderPl(id){
       if (pt.im.v){
         m = document.createElement("video"); m.className = "im"; m.muted = true; m.loop = true; m.playsInline = true; m.preload = "none";
         m.setAttribute("muted", ""); m.setAttribute("playsinline", "");
-        m.dataset.v = pt.im.v; m.poster = imgURL(pt.im.f, false);
+        m.dataset.v = pt.im.v; m.poster = imgURL(pt.im.f, 1);
         m.addEventListener("error", () => { if (!m.dataset.retried){ m.dataset.retried = 1; m.src = vidRaw(m.dataset.v); } });
         const badge = document.createElement("i"); badge.className = "vb"; badge.dataset.i = pt.i; el.append(badge);
         playIO && playIO.observe(m);
       } else {
         m = new Image(); m.alt = ""; m.draggable = false; m.decoding = "async"; m.className = "im";
-        m.addEventListener("error", onImgError); setImg(m, pt.im.f, false);
+        m.addEventListener("error", onImgError); setImg(m, pt.im.f, 0);
       }
       m.dataset.i = pt.i; el.append(m);
     });
@@ -572,18 +587,26 @@ function skyline(rects, W, gap){   // 빈틈이 적게: 각 틀을 지금 가장
   }
   return out;
 }
+function shelf(rects, W, gap){   // 줄마다 윗선을 맞춰 차례로 놓아요
+  const out = []; let x = 0, y = 0, rowH = 0;
+  for (const [w, h] of rects){
+    if (x > 0 && x + w > W){ x = 0; y += rowH + gap; rowH = 0; }
+    out.push([x, y]); x += w + gap; rowH = Math.max(rowH, h);
+  }
+  return out;
+}
 function arrange(){
   const ids = sel.size > 1 ? [...sel] : boardPls().map(p => p.id);
   if (ids.length < 2) return;
   const before = snap(ids);
   const arr = ids.map(id => ({ id, p: data.placements[id], g: geom(data.placements[id]) }));
+  arr.sort((a, b) => (data.posts[b.p.post]?.created || 0) - (data.posts[a.p.post]?.created || 0));
   const x0 = Math.min(...arr.map(a => a.p.x)), y0 = Math.min(...arr.map(a => a.p.y));
   const area = arr.reduce((s, a) => s + a.g.w * a.g.h, 0), maxW = Math.max(...arr.map(a => a.g.w));
-  arr.sort((a, b) => b.g.h - a.g.h || b.g.w - a.g.w);
   let best = null;
-  for (const m of [1.1, 1.25, 1.45, 1.7, 2.0]){
+  for (const m of [1.2, 1.4, 1.6, 1.8, 2.1, 2.4]){
     const W = Math.max(Math.sqrt(area) * m, maxW);
-    const pos = skyline(arr.map(a => [a.g.w, a.g.h]), W, 28);
+    const pos = shelf(arr.map(a => [a.g.w, a.g.h]), W, GAP_POST);
     const Wt = Math.max(...pos.map((p, i) => p[0] + arr[i].g.w)), Ht = Math.max(...pos.map((p, i) => p[1] + arr[i].g.h));
     const score = area / (Wt * Ht) - 0.15 * Math.abs(Math.log((Wt / Ht) / 1.6));
     if (!best || score > best.score) best = { score, pos };
@@ -670,7 +693,7 @@ stage.addEventListener("pointerdown", e => {
   closePops();
   try { stage.setPointerCapture(e.pointerId); } catch {}
   ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
-  if (ptrs.size === 2){ endGesture(true); const [a, b] = [...ptrs.values()]; g = { type: "pinch", d0: dist(a, b), m0: mid(a, b), v0: { ...view } }; return; }
+  if (ptrs.size === 2){ endGesture(true); const [a, b] = [...ptrs.values()]; g = { type: "pinch", d0: dist(a, b), m0: mid(a, b), v0: { ...view } }; gesturing = true; return; }
   if (ptrs.size > 2) return;
   const grp = e.target.closest(".grp");
   const base = { sx: e.clientX, sy: e.clientY, moved: false, button: e.button };
@@ -679,7 +702,7 @@ stage.addEventListener("pointerdown", e => {
     const id = grp.dataset.id; g = { type: "resize", ...base, id, before: snap([id]), h0: data.placements[id].h || 300, w0: geom(data.placements[id]).w }; gesturing = true; return;
   }
   if (grp && e.pointerType === "touch"){   // 휴대폰: 한 손가락으로 쓸면 화면 이동, 톡 누르면 그 게시글 선택
-    g = { type: "pan", ...base, vx: view.x, vy: view.y, tapSelect: grp.dataset.id }; return;
+    g = { type: "pan", ...base, vx: view.x, vy: view.y, tapSelect: grp.dataset.id }; gesturing = true; return;
   }
   if (grp){
     const id = grp.dataset.id, add = e.shiftKey || e.ctrlKey || e.metaKey;
@@ -690,7 +713,7 @@ stage.addEventListener("pointerdown", e => {
     g = { type: "move", ...base, clickId: id, add, more: e.target.classList.contains("more"), before: snap(ids), starts: ids.map(i => ({ id: i, x: data.placements[i].x, y: data.placements[i].y })) };
     gesturing = true; return;
   }
-  if (e.pointerType === "touch"){ g = { type: "pan", ...base, vx: view.x, vy: view.y, tapClear: true }; return; }
+  if (e.pointerType === "touch"){ g = { type: "pan", ...base, vx: view.x, vy: view.y, tapClear: true }; gesturing = true; return; }
   g = { type: "marquee", ...base, base: e.shiftKey ? new Set(sel) : new Set() };
   if (!e.shiftKey && sel.size){ sel.clear(); renderSel(); }
 });
@@ -745,12 +768,13 @@ function endGesture(cancelled){
     if (t.button === 2 && t.id && !sel.has(t.id)){ sel.clear(); sel.add(t.id); renderSel(); }
   }
   if (queuedRemote){ const d = queuedRemote; queuedRemote = null; RB.onRemote(d); }
+  updateVideos();
 }
 function onUp(e){
   if (!ptrs.has(e.pointerId)) return;
   ptrs.delete(e.pointerId);
   if (g && g.type === "pinch"){
-    if (ptrs.size === 1){ const [p] = [...ptrs.values()]; g = { type: "pan", sx: p.x, sy: p.y, vx: view.x, vy: view.y, moved: true }; } else if (!ptrs.size) g = null;
+    if (ptrs.size === 1){ const [p] = [...ptrs.values()]; g = { type: "pan", sx: p.x, sy: p.y, vx: view.x, vy: view.y, moved: true }; } else if (!ptrs.size){ g = null; gesturing = false; updateResolution(); }
     return;
   }
   if (!ptrs.size) endGesture(e.type === "pointercancel");
