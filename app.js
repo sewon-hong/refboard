@@ -244,17 +244,20 @@ function geom(pl){
   const H = pl.h || 300;
   const imgs = p.images || [];
   if (!imgs.length) return { w: Math.round(H * 0.8), h: H, card: true, parts: [], H };
-  const folded = imgs.length > FOLD && !pl.open;
-  const shown = folded ? imgs.slice(0, FOLD - 1) : imgs;
-  const parts = []; let x = PAD, y = PAD, maxW = 0, col = 0;
-  shown.forEach((im, i) => {
-    if (!folded && col === ROW){ maxW = Math.max(maxW, x - GAP); x = PAD; y += H + GAP; col = 0; }
-    const w = im.w / im.h * H; parts.push({ x, y, w, h: H, im, i }); x += w + GAP; col++;
-  });
-  let more = null;
-  if (folded){ more = { x, y, w: H * 0.55, h: H, n: imgs.length - shown.length }; x += more.w + GAP; }
-  maxW = Math.max(maxW, x - GAP);
-  return { w: maxW + PAD, h: y + H + PAD, parts, more, H, total: imgs.length, folded };
+  // 줄 수 = ceil(n/6), 장수를 고르게 나누고(8장 → 4+4), 줄마다 높이를 맞춰 모든 줄의 폭을 같게 해요 (빈틈 없는 직사각형)
+  const nRows = Math.ceil(imgs.length / ROW), base = Math.floor(imgs.length / nRows), extra = imgs.length % nRows;
+  const rows = []; let k = 0;
+  for (let r = 0; r < nRows; r++){ const c = base + (r < extra ? 1 : 0); rows.push(imgs.slice(k, k + c).map((im, j) => ({ im, i: k + j }))); k += c; }
+  const asp = row => row.reduce((s, o) => s + o.im.w / o.im.h, 0);
+  const innerW = rows.reduce((s, row) => s + asp(row) * H + GAP * (row.length - 1), 0) / nRows;
+  const parts = []; let y = PAD;
+  for (const row of rows){
+    const rh = (innerW - GAP * (row.length - 1)) / asp(row);
+    let x = PAD;
+    for (const o of row){ const w = o.im.w / o.im.h * rh; parts.push({ x, y, w, h: rh, im: o.im, i: o.i }); x += w + GAP; }
+    y += rh + GAP;
+  }
+  return { w: innerW + PAD * 2, h: y - GAP + PAD, parts, more: null, H, total: imgs.length, folded: false };
 }
 const boardPls = () => Object.entries(data.placements).filter(([, p]) => p.board === boardId).map(([id, p]) => ({ id, ...p, g: geom(p) }));
 const plRect = id => { const p = data.placements[id]; if (!p) return null; const g = geom(p); return { x: p.x, y: p.y, w: g.w, h: g.h }; };
