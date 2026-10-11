@@ -13,7 +13,7 @@
 </style>
 <script>
 /* 이 파일은 거의 바뀌지 않는 '로더'예요. 실제 화면(app.js)과 데이터(data.json)는
-   GitHub에서 최신 커밋을 10초마다 확인해 새로고침 없이 반영해요. */
+   GitHub의 version.json을 10초마다 확인해 새로고침 없이 반영해요. */
 window.RB = { owner: "sewon-hong", repo: "refboard", branch: "main", pollMs: 10000 };
 </script>
 </head>
@@ -33,28 +33,26 @@ window.RB = { owner: "sewon-hong", repo: "refboard", branch: "main", pollMs: 100
   RB.api = (path) => `https://api.github.com/repos/${RB.owner}/${RB.repo}/${path}`;
   RB.raw = (sha, path) => local ? path : `https://raw.githubusercontent.com/${RB.owner}/${RB.repo}/${sha}/${path}`;
 
-  let etag = null;
-  RB.latestSha = async () => {
-    if (local) return "local";
-    const h = RB.headers(etag ? { "If-None-Match": etag } : {});
-    const r = await fetch(RB.api(`commits/${RB.branch}`), { headers: h, cache: "no-store" });
-    if (r.status === 304) return null;
-    if (!r.ok) throw new Error("GitHub " + r.status);
-    etag = r.headers.get("ETag");
-    return (await r.json()).sha;
-  };
-  const getText = async (sha, path) => {
-    const r = await fetch(RB.raw(sha, path) + (local ? "?t=" + Date.now() : ""), { cache: local ? "no-store" : "default" });
+  /* 새 버전 확인: GitHub API(시간당 60회 제한) 대신 version.json(파일 해시)을 raw 주소로 확인해요.
+     ?t= 를 붙여 캐시를 피해요. API는 쓰지 않아서 횟수 제한에 걸리지 않아요. */
+  const rawMain = (path) => local ? path + "?t=" + Date.now()
+    : `https://raw.githubusercontent.com/${RB.owner}/${RB.repo}/${RB.branch}/${path}?t=${Date.now()}`;
+  const getText = async (path) => {
+    let r;
+    try { r = await fetch(rawMain(path), { cache: "no-store" }); } catch (e) { r = null; }
+    if (!r || !r.ok) r = await fetch(path + "?t=" + Date.now(), { cache: "no-store" });   // Pages 사본으로 대신
     if (!r.ok) throw new Error(path + " " + r.status);
     return r.text();
   };
+  const getVersion = async () => { try { return JSON.parse(await getText("version.json")); } catch { return null; } };
+  RB.latestSha = async () => null;
 
-  let appCode = null;
+  let ver = null, appCode = null;
   async function boot() {
-    const sha = await RB.latestSha();
-    RB.sha = sha;
-    const [code, json] = await Promise.all([getText(sha, "app.js"), getText(sha, "data.json")]);
+    ver = await getVersion();
+    const [code, json] = await Promise.all([getText("app.js"), getText("data.json")]);
     appCode = code;
+    RB.sha = ver ? ver.data : "0";
     RB.data = JSON.parse(json);
     const s = document.createElement("script");
     s.src = URL.createObjectURL(new Blob([code], { type: "text/javascript" }));
@@ -62,13 +60,12 @@ window.RB = { owner: "sewon-hong", repo: "refboard", branch: "main", pollMs: 100
   }
   async function poll() {
     try {
-      const sha = await RB.latestSha();
-      if (sha && sha !== RB.sha) {
-        const code = await getText(sha, "app.js");
-        if (code !== appCode) { RB.beforeReload && RB.beforeReload(); location.reload(); return; }
-        const data = JSON.parse(await getText(sha, "data.json"));
-        RB.sha = sha;
-        RB.onRemote && RB.onRemote(data, sha);
+      const v = await getVersion();
+      if (v && ver && v.app !== ver.app) { RB.beforeReload && RB.beforeReload(); location.reload(); return; }
+      if (v && (!ver || v.data !== ver.data)) {
+        const data = JSON.parse(await getText("data.json"));
+        ver = v; RB.sha = v.data;
+        RB.onRemote && RB.onRemote(data, v.data);
       }
     } catch (e) { console.warn("poll", e); }
     setTimeout(poll, document.hidden ? RB.pollMs * 3 : RB.pollMs);
