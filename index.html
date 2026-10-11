@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>레퍼런스 보드</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<style>
+  html,body{height:100%;margin:0;background:#1f2022;color:#e3e4e6;font:13px/1.45 "IBM Plex Sans KR",system-ui,sans-serif}
+  #boot{position:fixed;inset:0;display:grid;place-items:center;color:#8e9298}
+</style>
+<script>
+/* 이 파일은 거의 바뀌지 않는 '로더'예요. 실제 화면(app.js)과 데이터(data.json)는
+   GitHub에서 최신 커밋을 10초마다 확인해 새로고침 없이 반영해요. */
+window.RB = { owner: "sewon-hong", repo: "refboard", branch: "main", pollMs: 10000 };
+</script>
+</head>
+<body>
+<div id="boot">레퍼런스 보드를 불러오는 중…</div>
+<script>
+(() => {
+  const RB = window.RB;
+  const local = location.protocol === "file:" || /^(localhost|127\.)/.test(location.hostname);
+  RB.local = local;
+  RB.token = () => { try { return localStorage.getItem("rb.token") || ""; } catch { return ""; } };
+  RB.headers = (extra) => {
+    const h = { Accept: "application/vnd.github+json", ...(extra || {}) };
+    const t = RB.token(); if (t) h.Authorization = "Bearer " + t;
+    return h;
+  };
+  RB.api = (path) => `https://api.github.com/repos/${RB.owner}/${RB.repo}/${path}`;
+  RB.raw = (sha, path) => local ? path : `https://raw.githubusercontent.com/${RB.owner}/${RB.repo}/${sha}/${path}`;
+
+  let etag = null;
+  RB.latestSha = async () => {
+    if (local) return "local";
+    const h = RB.headers(etag ? { "If-None-Match": etag } : {});
+    const r = await fetch(RB.api(`commits/${RB.branch}`), { headers: h, cache: "no-store" });
+    if (r.status === 304) return null;
+    if (!r.ok) throw new Error("GitHub " + r.status);
+    etag = r.headers.get("ETag");
+    return (await r.json()).sha;
+  };
+  const getText = async (sha, path) => {
+    const r = await fetch(RB.raw(sha, path) + (local ? "?t=" + Date.now() : ""), { cache: local ? "no-store" : "default" });
+    if (!r.ok) throw new Error(path + " " + r.status);
+    return r.text();
+  };
+
+  let appCode = null;
+  async function boot() {
+    const sha = await RB.latestSha();
+    RB.sha = sha;
+    const [code, json] = await Promise.all([getText(sha, "app.js"), getText(sha, "data.json")]);
+    appCode = code;
+    RB.data = JSON.parse(json);
+    const s = document.createElement("script");
+    s.src = URL.createObjectURL(new Blob([code], { type: "text/javascript" }));
+    document.body.append(s);
+  }
+  async function poll() {
+    try {
+      const sha = await RB.latestSha();
+      if (sha && sha !== RB.sha) {
+        const code = await getText(sha, "app.js");
+        if (code !== appCode) { RB.beforeReload && RB.beforeReload(); location.reload(); return; }
+        const data = JSON.parse(await getText(sha, "data.json"));
+        RB.sha = sha;
+        RB.onRemote && RB.onRemote(data, sha);
+      }
+    } catch (e) { console.warn("poll", e); }
+    setTimeout(poll, document.hidden ? RB.pollMs * 3 : RB.pollMs);
+  }
+  boot().then(() => { if (!local) setTimeout(poll, RB.pollMs); })
+    .catch(e => { document.getElementById("boot").textContent = "불러오지 못했어요. 잠시 후 새로고침해 주세요. (" + e.message + ")"; });
+})();
+</script>
+</body>
+</html>
