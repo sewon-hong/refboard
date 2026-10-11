@@ -463,6 +463,11 @@ async function save(){
       try {
         await gh("contents/data.json", { method: "PUT", body: JSON.stringify({ message: "보드 배치 저장", content: b64(JSON.stringify(merged, null, 1)), sha: cur.sha, branch: RB.branch }) });
         remote = merged;
+        try {   // 다른 기기들이 알아채도록 version.json의 data 값을 바꿔요
+          const vf = await gh(`contents/version.json?ref=${RB.branch}`);
+          const v = JSON.parse(unb64(vf.content)); v.data = "web-" + Date.now().toString(36);
+          await gh("contents/version.json", { method: "PUT", body: JSON.stringify({ message: "배치 버전 갱신", content: b64(JSON.stringify(v)), sha: vf.sha, branch: RB.branch }) });
+        } catch (e){ console.warn("version bump", e); }
         break;
       } catch (e){ if (e.status !== 409 && e.status !== 422) throw e; if (attempt === 3) throw e; await new Promise(r => setTimeout(r, 400 + Math.random() * 600)); }
     }
